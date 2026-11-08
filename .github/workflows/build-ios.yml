@@ -16,13 +16,23 @@ jobs:
 
       - name: Route Graphics to Metal & Enable Touch UI
         run: |
-          # 1. Отключаем Vulkan и перенаправляем графический движок wgpu на нативный Metal для iOS
-          sed -i '' 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' crates/horizon-hdr/Cargo.toml
-          sed -i '' 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' crates/horizon-hdr/src/lib.rs
-          sed -i '' 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' crates/horizon-client-render/Cargo.toml
-          sed -i '' 's/target_os = "macos"/any(target_os = "macos", target_os = "ios")/g' crates/horizon-client-render/src/gfx.rs
+          echo "=== 1. Отключаем GLES во всех крейтах для iOS ==="
+          find crates -name "Cargo.toml" -exec sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' {} +
 
-          # 2. Включаем сенсорный джойстик и кнопки Bedrock под пальцы
+          echo "=== 2. Отключаем Vulkan в horizon-hdr ==="
+          sed -i '' 's/features = \["vulkan"\]/features = []/g' crates/horizon-hdr/Cargo.toml
+          sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-hdr/src/lib.rs
+          sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-hdr/src/lib.rs
+
+          echo "=== 3. Направляем рендер на Metal и устраняем дублирование констант ==="
+          sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
+          sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
+          sed -i '' 's/cfg(not(any(target_os = "windows", target_os = "macos")))/cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
+
+          echo "=== 4. Отключаем захват курсора мыши на тачскрине iOS ==="
+          sed -i '' 's/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios")))/g' crates/horizon-client/src/game.rs
+
+          echo "=== 5. Включаем сенсорный интерфейс Bedrock (джойстик, прыжок, присед, хотбар) ==="
           sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
 
       - name: Setup Rust & iOS Target
@@ -32,7 +42,18 @@ jobs:
 
       - name: Compile Horizon for iOS with Metal
         run: |
-          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client
+          # Экспортируем путь к настоящему iOS SDK для C-зависимостей (mimalloc, zlib и др.)
+          export SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          export IPHONEOS_DEPLOYMENT_TARGET=16.0
+
+          echo "Начинаем компиляцию Horizon Client под iOS Metal..."
+          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client 2>&1 | tee cargo_build.log || {
+            echo "## ❌ Ошибка компиляции Rust" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            tail -n 80 cargo_build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: Package into IPA Bundle
         run: |
@@ -42,7 +63,7 @@ jobs:
 
           VERSION=$(grep -m1 'version =' Cargo.toml | cut -d '"' -f2 || echo "0.4.5")
 
-          cat << EOF > Payload/Horizon.app/Info.plist
+          cat << 'EOF' > Payload/Horizon.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -56,9 +77,9 @@ jobs:
               <key>CFBundleDisplayName</key>
               <string>Horizon</string>
               <key>CFBundleVersion</key>
-              <string>${VERSION}</string>
+              <string>0.4.5</string>
               <key>CFBundleShortVersionString</key>
-              <string>${VERSION}</string>
+              <string>0.4.5</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>LSRequiresIPhoneOS</key>
