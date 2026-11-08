@@ -1,40 +1,40 @@
-name: Build Latest Horizon iOS with Touch Controls
+name: Build Latest Horizon iOS IPA
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Запуск кнопкой в любое время
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-15 # Актуальный рабочий сервер Apple Silicon от GitHub!
 
     steps:
-      - name: Fetch Latest Code from Rayan-XOO
+      - name: Fetch Latest Code from Upstream (Rayan-XOO)
         uses: actions/checkout@v4
         with:
           repository: 'Rayan-XOO/horizon'
-          ref: 'android-port'
+          ref: 'android-port' # Всегда качает последнюю версию автора с хотфиксами
 
-      - name: Enable Bedrock Touch Controls on iOS
+      - name: Enable Mobile Touch Controls & Chat for iOS
         run: |
-          # Включаем сенсорный интерфейс (джойстик, прыжок, кнопки) для iOS!
-          sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client/src/game/touch.rs
-          sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client/src/game.rs || true
+          # Включаем сенсорный интерфейс, джойстик и клавиатуру для iOS во всех файлах клиента
+          find crates/horizon-client/src -name "*.rs" -exec sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' {} +
 
       - name: Setup Rust & iOS Target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios
 
-      - name: Compile Horizon Client with Touch UI for iOS
+      - name: Compile Horizon for iOS (Metal / ARM64)
         run: |
           cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client
 
-      - name: Package into .IPA Bundle
+      - name: Package into IPA Bundle
         run: |
           mkdir -p Payload/Horizon.app
           cp target/aarch64-apple-ios/release/horizon-client Payload/Horizon.app/Horizon
           chmod +x Payload/Horizon.app/Horizon
 
+          # Динамически считываем версию из Cargo.toml
           VERSION=$(grep -m1 'version =' Cargo.toml | cut -d '"' -f2 || echo "0.4.5")
 
           cat << EOF > Payload/Horizon.app/Info.plist
@@ -72,11 +72,12 @@ jobs:
           </plist>
           EOF
 
+          # Накладываем подпись для установки без Mac
           codesign --force --deep --sign - Payload/Horizon.app
           zip -r Horizon.ipa Payload
 
       - name: Upload Finished IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Horizon-iOS-TouchControls
+          name: Horizon-iOS-Latest
           path: Horizon.ipa
