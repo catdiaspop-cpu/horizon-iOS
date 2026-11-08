@@ -26,23 +26,26 @@ jobs:
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-render/src/settings.rs
           sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-render/src/settings.rs
 
-          echo "=== 3. Отключаем OpenGL ES во всех крейтах для iOS ==="
+          echo "=== 3. Исправляем диагностику памяти в horizon-threads (выключаем закрытый proc_pidinfo на iOS) ==="
+          sed -i '' 's/target_vendor = "apple"/target_os = "macos"/g' crates/horizon-threads/src/process_memory.rs
+
+          echo "=== 4. Отключаем OpenGL ES во всех крейтах для iOS ==="
           find crates -name "Cargo.toml" -exec sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' {} +
 
-          echo "=== 4. Отключаем Vulkan и ash в horizon-hdr ==="
+          echo "=== 5. Отключаем Vulkan и ash в horizon-hdr ==="
           sed -i '' 's/features = \["vulkan"\]/features = []/g' crates/horizon-hdr/Cargo.toml
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-hdr/src/lib.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-hdr/src/lib.rs
 
-          echo "=== 5. Направляем рендер на Metal и устраняем дублирование констант ==="
+          echo "=== 6. Направляем рендер на Metal и устраняем дублирование констант ==="
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(not(any(target_os = "windows", target_os = "macos")))/cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
 
-          echo "=== 6. Отключаем захват курсора мыши на iOS ==="
+          echo "=== 7. Отключаем захват курсора мыши на iOS ==="
           sed -i '' 's/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios")))/g' crates/horizon-client/src/game.rs
 
-          echo "=== 7. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
+          echo "=== 8. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
           sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
 
       - name: Setup Rust & iOS Target
@@ -52,17 +55,12 @@ jobs:
 
       - name: Compile Horizon for iOS with Metal
         run: |
+          set -eo pipefail
           export SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           export IPHONEOS_DEPLOYMENT_TARGET=16.0
 
           echo "Начинаем компиляцию Horizon Client под iOS Metal..."
-          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client 2>&1 | tee cargo_build.log || {
-            echo "## ❌ Ошибка компиляции Rust" >> $GITHUB_STEP_SUMMARY
-            echo '```text' >> $GITHUB_STEP_SUMMARY
-            tail -n 80 cargo_build.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1
-          }
+          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client 2>&1 | tee cargo_build.log
 
       - name: Package into IPA Bundle
         run: |
