@@ -1,0 +1,69 @@
+name: Build Horizon IPA for iOS
+
+on:
+  workflow_dispatch: # позволяет запускать сборку кнопкой вручную
+  push:
+    branches: [ android-port ]
+
+jobs:
+  build-ios:
+    runs-on: macos-14 # Бесплатный Mac M1/M2 от GitHub!
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90.0
+          targets: aarch64-apple-ios
+
+      - name: Build horizon-client for iOS
+        run: |
+          cargo build --release --target aarch64-apple-ios -p horizon-client
+
+      - name: Package into .IPA
+        run: |
+          mkdir -p Payload/Horizon.app
+          cp target/aarch64-apple-ios/release/horizon-client Payload/Horizon.app/Horizon
+          
+          # Создаем Info.plist для iOS
+          cat <<EOF > Payload/Horizon.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>Horizon</string>
+              <key>CFBundleIdentifier</key>
+              <string>dev.horizonlab.horizon</string>
+              <key>CFBundleName</key>
+              <string>Horizon</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>0.4.5</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+                  <string>metal</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+          
+          # Подписываем ad-hoc подписью
+          codesign --force --deep --sign - Payload/Horizon.app
+          
+          # Упаковываем в IPA
+          zip -r Horizon.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Horizon-iOS
+          path: Horizon.ipa
