@@ -16,23 +16,33 @@ jobs:
 
       - name: Route Graphics to Metal & Enable Touch UI
         run: |
-          echo "=== 1. Отключаем GLES во всех крейтах для iOS ==="
+          echo "=== 1. Убираем arboard и wayland (включаем мобильный буфер обмена для iOS) ==="
+          sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-input/Cargo.toml
+          sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/clipboard.rs
+          sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/keybinds.rs
+          sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-input/src/keybinds.rs
+
+          echo "=== 2. Оптимизируем настройки графики под мобильный экран (fit_phone) ==="
+          sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-render/src/settings.rs
+          sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-render/src/settings.rs
+
+          echo "=== 3. Отключаем OpenGL ES во всех крейтах для iOS ==="
           find crates -name "Cargo.toml" -exec sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' {} +
 
-          echo "=== 2. Отключаем Vulkan в horizon-hdr ==="
+          echo "=== 4. Отключаем Vulkan и ash в horizon-hdr ==="
           sed -i '' 's/features = \["vulkan"\]/features = []/g' crates/horizon-hdr/Cargo.toml
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-hdr/src/lib.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-hdr/src/lib.rs
 
-          echo "=== 3. Направляем рендер на Metal и устраняем дублирование констант ==="
+          echo "=== 5. Направляем рендер на Metal и устраняем дублирование констант ==="
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(not(any(target_os = "windows", target_os = "macos")))/cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
 
-          echo "=== 4. Отключаем захват курсора мыши на тачскрине iOS ==="
+          echo "=== 6. Отключаем захват курсора мыши на iOS ==="
           sed -i '' 's/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios")))/g' crates/horizon-client/src/game.rs
 
-          echo "=== 5. Включаем сенсорный интерфейс Bedrock (джойстик, прыжок, присед, хотбар) ==="
+          echo "=== 7. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
           sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
 
       - name: Setup Rust & iOS Target
@@ -42,7 +52,6 @@ jobs:
 
       - name: Compile Horizon for iOS with Metal
         run: |
-          # Экспортируем путь к настоящему iOS SDK для C-зависимостей (mimalloc, zlib и др.)
           export SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           export IPHONEOS_DEPLOYMENT_TARGET=16.0
 
