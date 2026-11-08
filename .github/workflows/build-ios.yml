@@ -16,8 +16,8 @@ jobs:
 
       - name: Route Graphics to Metal & Enable Touch UI
         run: |
-          echo "=== 1. Полностью обходим проверку ресурсов (100% запуск в Главное Меню Клиента) ==="
-          sed -i '' 's/if let Some(error) = missing_resources(&vanilla_root)/if false/g' crates/horizon-client/src/game.rs
+          echo "=== 1. Отключаем проверку missing_resources (сразу запуск в Главное Меню Клиента) ==="
+          sed -i '' 's/if let Some(error) = missing_resources(&vanilla_root)/if let Some(error) = None::<String>/g' crates/horizon-client/src/game.rs
 
           echo "=== 2. Перенаправляем выбор бэкенда на Metal под iOS ==="
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/gfx.rs
