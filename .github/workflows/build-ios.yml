@@ -16,36 +16,39 @@ jobs:
 
       - name: Route Graphics to Metal & Enable Touch UI
         run: |
-          echo "=== 1. Убираем arboard и wayland (включаем мобильный буфер обмена для iOS) ==="
+          echo "=== 1. Разрешаем unsafe-код компилятора для iOS (как на Android) ==="
+          sed -i '' 's/cfg_attr(not(target_os = "android"), forbid(unsafe_code))/cfg_attr(not(any(target_os = "android", target_os = "ios")), forbid(unsafe_code))/g' crates/horizon-client/src/lib.rs
+
+          echo "=== 2. Убираем arboard и wayland (включаем мобильный буфер обмена для iOS) ==="
           sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-input/Cargo.toml
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/clipboard.rs
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/keybinds.rs
           sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-input/src/keybinds.rs
 
-          echo "=== 2. Оптимизируем настройки графики под мобильный экран (fit_phone) ==="
+          echo "=== 3. Оптимизируем настройки графики под мобильный экран (fit_phone) ==="
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-render/src/settings.rs
           sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-render/src/settings.rs
 
-          echo "=== 3. Исправляем диагностику памяти в horizon-threads (выключаем закрытый proc_pidinfo на iOS) ==="
+          echo "=== 4. Исправляем диагностику памяти в horizon-threads ==="
           sed -i '' 's/target_vendor = "apple"/target_os = "macos"/g' crates/horizon-threads/src/process_memory.rs
 
-          echo "=== 4. Отключаем OpenGL ES во всех крейтах для iOS ==="
+          echo "=== 5. Отключаем OpenGL ES во всех крейтах для iOS ==="
           find crates -name "Cargo.toml" -exec sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' {} +
 
-          echo "=== 5. Отключаем Vulkan и ash в horizon-hdr ==="
+          echo "=== 6. Отключаем Vulkan и ash в horizon-hdr ==="
           sed -i '' 's/features = \["vulkan"\]/features = []/g' crates/horizon-hdr/Cargo.toml
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-hdr/src/lib.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-hdr/src/lib.rs
 
-          echo "=== 6. Направляем рендер на Metal и устраняем дублирование констант ==="
+          echo "=== 7. Направляем рендер на Metal и устраняем дублирование констант ==="
           sed -i '' 's/cfg(not(target_os = "macos"))/cfg(not(any(target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(target_os = "macos")/cfg(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/cfg(not(any(target_os = "windows", target_os = "macos")))/cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))/g' crates/horizon-client-render/src/gfx.rs
 
-          echo "=== 7. Отключаем захват курсора мыши на iOS ==="
+          echo "=== 8. Отключаем захват курсора мыши на iOS ==="
           sed -i '' 's/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios")))/g' crates/horizon-client/src/game.rs
 
-          echo "=== 8. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
+          echo "=== 9. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
           sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
 
       - name: Setup Rust & iOS Target
