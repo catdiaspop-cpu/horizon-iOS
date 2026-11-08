@@ -1,34 +1,43 @@
-name: Build Horizon IPA for iOS
+name: Build Latest Horizon iOS with Touch Controls
 
 on:
-  workflow_dispatch: # позволяет запускать сборку кнопкой вручную
-  push:
-    branches: [ android-port ]
+  workflow_dispatch:
 
 jobs:
   build-ios:
-    runs-on: macos-14 # Бесплатный Mac M1/M2 от GitHub!
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    runs-on: macos-latest
 
-      - name: Install Rust Toolchain
+    steps:
+      - name: Fetch Latest Code from Rayan-XOO
+        uses: actions/checkout@v4
+        with:
+          repository: 'Rayan-XOO/horizon'
+          ref: 'android-port'
+
+      - name: Enable Bedrock Touch Controls on iOS
+        run: |
+          # Включаем сенсорный интерфейс (джойстик, прыжок, кнопки) для iOS!
+          sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client/src/game/touch.rs
+          sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client/src/game.rs || true
+
+      - name: Setup Rust & iOS Target
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90.0
           targets: aarch64-apple-ios
 
-      - name: Build horizon-client for iOS
+      - name: Compile Horizon Client with Touch UI for iOS
         run: |
-          cargo build --release --target aarch64-apple-ios -p horizon-client
+          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client
 
-      - name: Package into .IPA
+      - name: Package into .IPA Bundle
         run: |
           mkdir -p Payload/Horizon.app
           cp target/aarch64-apple-ios/release/horizon-client Payload/Horizon.app/Horizon
-          
-          # Создаем Info.plist для iOS
-          cat <<EOF > Payload/Horizon.app/Info.plist
+          chmod +x Payload/Horizon.app/Horizon
+
+          VERSION=$(grep -m1 'version =' Cargo.toml | cut -d '"' -f2 || echo "0.4.5")
+
+          cat << EOF > Payload/Horizon.app/Info.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -39,12 +48,14 @@ jobs:
               <string>dev.horizonlab.horizon</string>
               <key>CFBundleName</key>
               <string>Horizon</string>
+              <key>CFBundleDisplayName</key>
+              <string>Horizon</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>0.4.5</string>
-              <key>CFBundleVersion</key>
-              <string>1</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
               <key>UIRequiredDeviceCapabilities</key>
@@ -52,18 +63,20 @@ jobs:
                   <string>arm64</string>
                   <string>metal</string>
               </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
           </dict>
           </plist>
           EOF
-          
-          # Подписываем ad-hoc подписью
+
           codesign --force --deep --sign - Payload/Horizon.app
-          
-          # Упаковываем в IPA
           zip -r Horizon.ipa Payload
 
-      - name: Upload IPA Artifact
+      - name: Upload Finished IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Horizon-iOS
+          name: Horizon-iOS-TouchControls
           path: Horizon.ipa
