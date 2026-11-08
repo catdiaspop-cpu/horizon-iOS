@@ -1,0 +1,81 @@
+name: Build Latest Horizon iOS IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+
+    steps:
+      - name: Fetch Latest Code from Upstream (Rayan-XOO)
+        uses: actions/checkout@v4
+        with:
+          repository: 'Rayan-XOO/horizon'
+          ref: 'android-port'
+
+      - name: Enable Bedrock Touch Layout for iOS
+        run: |
+          # Включаем сенсорный интерфейс ТОЛЬКО в кнопках, не ломая клавиатуру Java
+          sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
+
+      - name: Setup Rust & iOS Target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Compile Horizon Client for iOS (Metal/ARM64)
+        run: |
+          cargo build --release --target aarch64-apple-ios -p horizon-client --bin horizon-client
+
+      - name: Package into .IPA Bundle
+        run: |
+          mkdir -p Payload/Horizon.app
+          cp target/aarch64-apple-ios/release/horizon-client Payload/Horizon.app/Horizon
+          chmod +x Payload/Horizon.app/Horizon
+
+          VERSION=$(grep -m1 'version =' Cargo.toml | cut -d '"' -f2 || echo "0.4.5")
+
+          cat << EOF > Payload/Horizon.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>Horizon</string>
+              <key>CFBundleIdentifier</key>
+              <string>dev.horizonlab.horizon</string>
+              <key>CFBundleName</key>
+              <string>Horizon</string>
+              <key>CFBundleDisplayName</key>
+              <string>Horizon</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+                  <string>metal</string>
+              </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+          codesign --force --deep --sign - Payload/Horizon.app
+          zip -r Horizon.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Horizon-iOS-Latest
+          path: Horizon.ipa
