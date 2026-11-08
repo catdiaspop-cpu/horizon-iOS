@@ -16,14 +16,14 @@ jobs:
 
       - name: Route Graphics to Metal & Enable Touch UI
         run: |
-          echo "=== 1. Перенаправляем выбор бэкенда на Metal под iOS (устраняем черный экран) ==="
+          echo "=== 1. Перенаправляем выбор бэкенда на Metal под iOS ==="
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/else if cfg!(target_os = "macos")/else if cfg!(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/graphics.rs
 
-          echo "=== 2. Разрешаем unsafe-код компилятора для iOS (как на Android) ==="
+          echo "=== 2. Разрешаем unsafe-код компилятора для iOS ==="
           sed -i '' 's/cfg_attr(not(target_os = "android"), forbid(unsafe_code))/cfg_attr(not(any(target_os = "android", target_os = "ios")), forbid(unsafe_code))/g' crates/horizon-client/src/lib.rs
 
-          echo "=== 3. Убираем arboard и wayland (включаем мобильный буфер обмена для iOS) ==="
+          echo "=== 3. Включаем мобильный буфер обмена для iOS ==="
           sed -i '' 's/cfg(not(target_os = "android"))/cfg(not(any(target_os = "android", target_os = "ios")))/g' crates/horizon-client-input/Cargo.toml
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/clipboard.rs
           sed -i '' 's/cfg(target_os = "android")/cfg(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/src/keybinds.rs
@@ -52,7 +52,7 @@ jobs:
           echo "=== 9. Отключаем захват курсора мыши на iOS ==="
           sed -i '' 's/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))/cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios")))/g' crates/horizon-client/src/game.rs
 
-          echo "=== 10. Включаем сенсорное управление Bedrock (джойстик, прыжок, присед, хотбар) ==="
+          echo "=== 10. Включаем сенсорное управление Bedrock ==="
           sed -i '' 's/cfg!(target_os = "android")/cfg!(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/game/touch.rs
 
       - name: Setup Rust & iOS Target
@@ -98,6 +98,18 @@ jobs:
               <string>APPL</string>
               <key>LSRequiresIPhoneOS</key>
               <true/>
+              <key>UIFileSharingEnabled</key>
+              <true/>
+              <key>LSSupportsOpeningDocumentsInPlace</key>
+              <true/>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UIRequiresFullScreen</key>
+              <true/>
+              <key>UIStatusBarHidden</key>
+              <true/>
+              <key>UIViewControllerBasedStatusBarAppearance</key>
+              <false/>
               <key>UIRequiredDeviceCapabilities</key>
               <array>
                   <string>arm64</string>
