@@ -46,7 +46,7 @@ jobs:
           # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/lib.rs
 
-          # 3. Disable Wayland clipboard on iOS (use mobile in-memory clipboard)
+          # 3. Disable Wayland/X11 arboard clipboard on iOS (match android target cfg)
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/Cargo.toml
 
           # 4. Fix memory profiling syscalls restricted by iOS Sandbox
