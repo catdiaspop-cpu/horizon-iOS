@@ -46,7 +46,7 @@ jobs:
           # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/lib.rs
 
-          # 3. Treat iOS like Android for input/clipboard (disable desktop arboard & modifier_supplement)
+          # 3. Treat iOS like Android for input/clipboard
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/Cargo.toml
           sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client-input/src/clipboard.rs || true
           sed -i '' 's/target_os = "android"/any(target_os = "android", target_os = "ios")/g' crates/horizon-client-input/src/keybinds.rs || true
@@ -56,6 +56,12 @@ jobs:
 
           # 5. Fix duplicate NO_GPU_DRIVER definition
           sed -i '' 's/not(any(target_os = "windows", target_os = "macos"))/not(any(target_os = "windows", target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
+
+          # 6. Enable vulkan/metal hal in wgpu for horizon-hdr on iOS
+          echo '
+          [target."cfg(target_os = \"ios\")".dependencies]
+          wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "wgsl", "naga-ir"] }
+          ' >> crates/horizon-hdr/Cargo.toml
 
       - name: Download Mojang 26.3 Game Assets & Prepare Resources
         run: |
