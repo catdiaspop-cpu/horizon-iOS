@@ -37,82 +37,86 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-ios-
 
-      - name: Apply Metal API & iOS Compatibility Patches via Python
+      - name: Apply Metal API & iOS Compatibility Patches
         run: |
-          python3 -c "
+          cat << 'EOF' > patch_ios.py
+          import os
+
           def patch_file(path, old, new):
+              if not os.path.exists(path):
+                  print(f"Error: {path} not found")
+                  return
               with open(path, 'r', encoding='utf-8') as f:
                   content = f.read()
               if old not in content:
-                  print(f'WARNING: pattern not found in {path}: {old}')
+                  print(f"WARNING: pattern not found in {path}")
               content = content.replace(old, new)
               with open(path, 'w', encoding='utf-8') as f:
                   f.write(content)
-              print(f'Patched {path}')
+              print(f"Successfully patched {path}")
 
           # 1. Force Metal backend in wgpu & fix NO_GPU_DRIVER
           patch_file('crates/horizon-client-render/src/gfx.rs', 
-                     'if os == \"macos\" || wgpu_backend', 
-                     'if os == \"macos\" || os == \"ios\" || wgpu_backend')
+                     'if os == "macos" || wgpu_backend', 
+                     'if os == "macos" || os == "ios" || wgpu_backend')
 
           patch_file('crates/horizon-client-render/src/graphics.rs', 
-                     'if os == \"macos\" || wgpu_backend', 
-                     'if os == \"macos\" || os == \"ios\" || wgpu_backend')
+                     'if os == "macos" || wgpu_backend', 
+                     'if os == "macos" || os == "ios" || wgpu_backend')
 
           patch_file('crates/horizon-client-render/src/gfx.rs', 
-                     'not(any(target_os = \"windows\", target_os = \"macos\"))', 
-                     'not(any(target_os = \"windows\", target_os = \"macos\", target_os = \"ios\"))')
+                     'not(any(target_os = "windows", target_os = "macos"))', 
+                     'not(any(target_os = "windows", target_os = "macos", target_os = "ios"))')
 
           # Add NO_GPU_DRIVER for iOS
-          with open('crates/horizon-client-render/src/gfx.rs', 'r', encoding='utf-8') as f:
+          gfx_path = 'crates/horizon-client-render/src/gfx.rs'
+          with open(gfx_path, 'r', encoding='utf-8') as f:
               code = f.read()
-          if 'const NO_GPU_DRIVER: &str = \"No Metal graphics device found on iOS\";' not in code:
-              code = code.replace(
-                  '#[cfg(target_os = \"macos\")]\nconst NO_GPU_DRIVER: &str = \"No Metal graphics device found\";',
-                  '#[cfg(target_os = \"macos\")]\nconst NO_GPU_DRIVER: &str = \"No Metal graphics device found\";\n#[cfg(target_os = \"ios\")]\nconst NO_GPU_DRIVER: &str = \"No Metal graphics device found on iOS\";'
-              )
-              with open('crates/horizon-client-render/src/gfx.rs', 'w', encoding='utf-8') as f:
+          target_str = '#[cfg(target_os = "macos")]\nconst NO_GPU_DRIVER: &str = "No Metal graphics device found";'
+          replacement_str = target_str + '\n#[cfg(target_os = "ios")]\nconst NO_GPU_DRIVER: &str = "No Metal graphics device found on iOS";'
+          if 'const NO_GPU_DRIVER: &str = "No Metal graphics device found on iOS";' not in code:
+              code = code.replace(target_str, replacement_str)
+              with open(gfx_path, 'w', encoding='utf-8') as f:
                   f.write(code)
+              print("Added NO_GPU_DRIVER for iOS")
 
           # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           patch_file('crates/horizon-client/src/lib.rs', 
-                     'not(target_os = \"android\")', 
-                     'not(any(target_os = \"android\", target_os = \"ios\"))')
+                     'not(target_os = "android")', 
+                     'not(any(target_os = "android", target_os = "ios"))')
 
           # 3. Treat iOS like Android for input/clipboard
           patch_file('crates/horizon-client-input/Cargo.toml', 
-                     'not(target_os = \"android\")', 
-                     'not(any(target_os = \"android\", target_os = \"ios\"))')
-
+                     'not(target_os = "android")', 
+                     'not(any(target_os = "android", target_os = "ios"))')
           patch_file('crates/horizon-client-input/src/clipboard.rs', 
-                     'target_os = \"android\"', 
-                     'any(target_os = \"android\", target_os = \"ios\")')
-
+                     'target_os = "android"', 
+                     'any(target_os = "android", target_os = "ios")')
           patch_file('crates/horizon-client-input/src/keybinds.rs', 
-                     'target_os = \"android\"', 
-                     'any(target_os = \"android\", target_os = \"ios\")')
+                     'target_os = "android"', 
+                     'any(target_os = "android", target_os = "ios")')
 
           # 4. Fix memory profiling syscalls restricted by iOS Sandbox
           patch_file('crates/horizon-threads/src/process_memory.rs', 
-                     'target_vendor = \"apple\"', 
-                     'target_os = \"macos\"')
+                     'target_vendor = "apple"', 
+                     'target_os = "macos"')
 
           # 5. Exclude iOS from Vulkan-only HDR calls in horizon-hdr & add stub
           patch_file('crates/horizon-hdr/src/lib.rs', 
-                     'not(target_os = \"macos\")', 
-                     'not(any(target_os = \"macos\", target_os = \"ios\"))')
+                     'not(target_os = "macos")', 
+                     'not(any(target_os = "macos", target_os = "ios"))')
 
-          with open('crates/horizon-hdr/src/lib.rs', 'r', encoding='utf-8') as f:
+          hdr_path = 'crates/horizon-hdr/src/lib.rs'
+          with open(hdr_path, 'r', encoding='utf-8') as f:
               hdr_code = f.read()
-          if 'pub fn open_vulkan_device' in hdr_code and 'cfg(target_os = \"ios\")' not in hdr_code:
-              hdr_code = hdr_code.replace(
-                  'pub fn open_vulkan_device(',
-                  '#[cfg(target_os = \"ios\")]\npub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\n\npub fn open_vulkan_device('
-              )
-              with open('crates/horizon-hdr/src/lib.rs', 'w', encoding='utf-8') as f:
+          stub = '#[cfg(target_os = "ios")]\npub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\n\n'
+          if 'pub fn open_vulkan_device' in hdr_code and 'cfg(target_os = "ios")' not in hdr_code:
+              hdr_code = hdr_code.replace('pub fn open_vulkan_device(', stub + 'pub fn open_vulkan_device(')
+              with open(hdr_path, 'w', encoding='utf-8') as f:
                   f.write(hdr_code)
-          print('All patches applied successfully via Python!')
-          "
+              print("Added open_vulkan_device stub for iOS")
+          EOF
+          python3 patch_ios.py
 
       - name: Download Mojang 26.3 Game Assets & Prepare Resources
         run: |
