@@ -68,7 +68,6 @@ jobs:
                      'not(any(target_os = "windows", target_os = "macos"))', 
                      'not(any(target_os = "windows", target_os = "macos", target_os = "ios"))')
 
-          # Add NO_GPU_DRIVER for iOS
           gfx_path = 'crates/horizon-client-render/src/gfx.rs'
           with open(gfx_path, 'r', encoding='utf-8') as f:
               code = f.read()
@@ -78,7 +77,6 @@ jobs:
               code = code.replace(target_str, replacement_str)
               with open(gfx_path, 'w', encoding='utf-8') as f:
                   f.write(code)
-              print("Added NO_GPU_DRIVER for iOS")
 
           # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           patch_file('crates/horizon-client/src/lib.rs', 
@@ -101,21 +99,16 @@ jobs:
                      'target_vendor = "apple"', 
                      'target_os = "macos"')
 
-          # 5. Exclude iOS from Vulkan-only HDR calls in horizon-hdr & add stub
-          patch_file('crates/horizon-hdr/src/lib.rs', 
-                     'not(target_os = "macos")', 
-                     'not(any(target_os = "macos", target_os = "ios"))')
-
+          # 5. Completely stub out horizon-hdr for iOS to avoid any Vulkan reference errors
           hdr_path = 'crates/horizon-hdr/src/lib.rs'
-          with open(hdr_path, 'r', encoding='utf-8') as f:
-              hdr_code = f.read()
-          
-          stub = '#[cfg(target_os = "ios")]\npub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\n\n'
-          if 'pub fn open_vulkan_device' in hdr_code and 'cfg(target_os = "ios")' not in hdr_code:
-              hdr_code = hdr_code.replace('pub fn open_vulkan_device(', stub + 'pub fn open_vulkan_device(')
-              with open(hdr_path, 'w', encoding='utf-8') as f:
-                  f.write(hdr_code)
-              print("Added open_vulkan_device stub for iOS")
+          with open(hdr_path, 'w', encoding='utf-8') as f:
+              f.write('''
+              pub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> {
+                  None
+              }
+              pub fn set_metadata(_device: &wgpu::Device, _surface: &wgpu::Surface<'_>, _paper_white: f32, _peak: f32, _black: f32) {}
+              ''')
+          print("Stubbed horizon-hdr for iOS successfully")
           EOF
           python3 patch_ios.py
 
