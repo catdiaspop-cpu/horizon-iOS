@@ -1,4 +1,4 @@
-name: Build Horizon iOS (Ready-to-Play IPA)
+name: Build Horizon iOS (Full Automated IPA)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
         with:
           submodules: true
 
-      - name: Setup Java 25 (For asset preparation)
+      - name: Setup Java 25 (Required for horizon-prepare Java exporters)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -26,9 +26,20 @@ jobs:
         with:
           targets: aarch64-apple-ios
 
-      - name: Apply Metal API & iOS Patches
+      - name: Cache Cargo Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-ios-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ios-
+
+      - name: Apply Metal API & iOS Compatibility Patches
         run: |
-          # 1. Force Metal backend in wgpu
+          # 1. Force Metal backend in wgpu (fix black screen on iOS)
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client/src/graphics.rs
 
@@ -44,7 +55,7 @@ jobs:
           # 5. Fix duplicate NO_GPU_DRIVER definition
           sed -i '' 's/not(any(target_os = "windows", target_os = "macos"))/not(any(target_os = "windows", target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
 
-      - name: Download Minecraft 26.3 & Prepare Resources on macOS Runner
+      - name: Download Mojang 26.3 & Run Java Exporters
         run: |
           python3 -c "
           import os, json, urllib.request
@@ -107,22 +118,23 @@ jobs:
           print(f'[+] Fetching {len(tasks)} assets in parallel...')
           with ThreadPoolExecutor(max_workers=20) as pool:
               list(pool.map(fetch, tasks))
-          print('[+] Done!')
+          print('[+] All assets downloaded successfully!')
           "
 
+          echo "[+] Running horizon-prepare exporters with Java 25..."
           cargo run --release -p horizon-prepare -- --prepare --minecraft-dir .minecraft --server-jar server.jar
 
-      - name: Build Horizon Native iOS Binary
+      - name: Build Horizon Native iOS Binary (Metal Backend)
         run: |
           cargo build --target aarch64-apple-ios --release -p horizon-client
 
-      - name: Assemble iOS App Bundle & Bundle Resources
+      - name: Assemble iOS App Bundle & Package Resources
         run: |
           mkdir -p Payload/Horizon.app
           cp target/aarch64-apple-ios/release/horizon Payload/Horizon.app/Horizon
           chmod +x Payload/Horizon.app/Horizon
 
-          # Copy prepared game resources inside the app bundle
+          # Copy compiled resources inside app bundle
           mkdir -p Payload/Horizon.app/resources
           cp -R .local/horizon-client/26.3/* Payload/Horizon.app/resources/
 
@@ -170,11 +182,11 @@ jobs:
           </plist>
           EOF
 
-      - name: Create IPA Package
+      - name: Create Unsigned IPA Package
         run: |
           zip -r Horizon.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload Horizon.ipa Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Horizon-iOS
