@@ -39,9 +39,14 @@ jobs:
 
       - name: Apply Metal API & iOS Compatibility Patches
         run: |
-          # 1. Force Metal backend in wgpu (fix black screen on iOS)
+          # 1. Force Metal backend in wgpu & ensure NO_GPU_DRIVER supports iOS
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/gfx.rs
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/graphics.rs
+          sed -i '' 's/not(any(target_os = "windows", target_os = "macos"))/not(any(target_os = "windows", target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
+          sed -i '' '/#[cfg(target_os = "macos")]/a\
+          #[cfg(target_os = "ios")]\
+          const NO_GPU_DRIVER: &str = "No Metal graphics device found on iOS";
+          ' crates/horizon-client-render/src/gfx.rs
 
           # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/lib.rs
@@ -54,11 +59,12 @@ jobs:
           # 4. Fix memory profiling syscalls restricted by iOS Sandbox
           sed -i '' 's/target_vendor = "apple"/target_os = "macos"/g' crates/horizon-threads/src/process_memory.rs
 
-          # 5. Fix duplicate NO_GPU_DRIVER definition
-          sed -i '' 's/not(any(target_os = "windows", target_os = "macos"))/not(any(target_os = "windows", target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
-
-          # 6. Exclude iOS from Vulkan-only HDR calls in horizon-hdr
+          # 5. Exclude iOS from Vulkan-only HDR calls in horizon-hdr & add open_vulkan_device stub for iOS
           sed -i '' 's/not(target_os = "macos")/not(any(target_os = "macos", target_os = "ios"))/g' crates/horizon-hdr/src/lib.rs
+          sed -i '' '/pub fn open_vulkan_device/i\
+          #[cfg(target_os = "ios")]\
+          pub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\
+          ' crates/horizon-hdr/src/lib.rs
 
       - name: Download Mojang 26.3 Game Assets & Prepare Resources
         run: |
