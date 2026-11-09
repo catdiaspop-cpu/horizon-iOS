@@ -1,4 +1,4 @@
-name: Build Horizon iOS (Full Automated IPA)
+name: Build Horizon iOS (.ipa)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
         with:
           submodules: true
 
-      - name: Setup Java 25 (Required for horizon-prepare Java exporters)
+      - name: Setup Java 25 (Required for horizon-prepare exporters)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -41,21 +41,21 @@ jobs:
         run: |
           # 1. Force Metal backend in wgpu (fix black screen on iOS)
           sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/gfx.rs
-          sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client/src/graphics.rs
+          sed -i '' 's/if os == "macos" || wgpu_backend/if os == "macos" || os == "ios" || wgpu_backend/g' crates/horizon-client-render/src/graphics.rs
 
-          # 2. Allow unsafe code on iOS
+          # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client/src/lib.rs
 
-          # 3. Use mobile clipboard on iOS
+          # 3. Disable Wayland clipboard on iOS (use mobile in-memory clipboard)
           sed -i '' 's/not(target_os = "android")/not(any(target_os = "android", target_os = "ios"))/g' crates/horizon-client-input/Cargo.toml
 
-          # 4. Fix memory profiling for iOS
+          # 4. Fix memory profiling syscalls restricted by iOS Sandbox
           sed -i '' 's/target_vendor = "apple"/target_os = "macos"/g' crates/horizon-threads/src/process_memory.rs
 
           # 5. Fix duplicate NO_GPU_DRIVER definition
           sed -i '' 's/not(any(target_os = "windows", target_os = "macos"))/not(any(target_os = "windows", target_os = "macos", target_os = "ios"))/g' crates/horizon-client-render/src/gfx.rs
 
-      - name: Download Mojang 26.3 & Run Java Exporters
+      - name: Download Mojang 26.3 Game Assets & Prepare Resources
         run: |
           python3 -c "
           import os, json, urllib.request
@@ -72,17 +72,17 @@ jobs:
               f.write(ver_bytes)
           ver_json = json.loads(ver_bytes)
 
-          print('[+] Downloading Client JAR...')
+          print('[+] Downloading Minecraft 26.3 Client JAR...')
           req = urllib.request.Request(ver_json['downloads']['client']['url'], headers={'User-Agent': 'Mozilla/5.0'})
           with urllib.request.urlopen(req) as r, open(os.path.join(ver_dir, '26.3.jar'), 'wb') as f:
               f.write(r.read())
 
-          print('[+] Downloading Server JAR...')
+          print('[+] Downloading Minecraft 26.3 Server JAR...')
           req = urllib.request.Request('https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar', headers={'User-Agent': 'Mozilla/5.0'})
           with urllib.request.urlopen(req) as r, open('server.jar', 'wb') as f:
               f.write(r.read())
 
-          print('[+] Downloading Asset Index...')
+          print('[+] Downloading Asset Index 34.json...')
           idx_dir = os.path.join(mc_dir, 'assets', 'indexes')
           os.makedirs(idx_dir, exist_ok=True)
           req = urllib.request.Request(ver_json['assetIndex']['url'], headers={'User-Agent': 'Mozilla/5.0'})
@@ -115,16 +115,16 @@ jobs:
               except Exception:
                   pass
 
-          print(f'[+] Fetching {len(tasks)} assets in parallel...')
+          print(f'[+] Downloading {len(tasks)} Mojang dependencies & assets...')
           with ThreadPoolExecutor(max_workers=20) as pool:
               list(pool.map(fetch, tasks))
-          print('[+] All assets downloaded successfully!')
+          print('[+] All Mojang assets downloaded!')
           "
 
-          echo "[+] Running horizon-prepare exporters with Java 25..."
+          echo "[+] Running horizon-prepare exporters..."
           cargo run --release -p horizon-prepare -- --prepare --minecraft-dir .minecraft --server-jar server.jar
 
-      - name: Build Horizon Native iOS Binary (Metal Backend)
+      - name: Build Horizon Native iOS Binary
         run: |
           cargo build --target aarch64-apple-ios --release -p horizon-client
 
@@ -134,10 +134,11 @@ jobs:
           cp target/aarch64-apple-ios/release/horizon Payload/Horizon.app/Horizon
           chmod +x Payload/Horizon.app/Horizon
 
-          # Copy compiled resources inside app bundle
+          # Copy full prepared 26.3 game resources into App Bundle
           mkdir -p Payload/Horizon.app/resources
           cp -R .local/horizon-client/26.3/* Payload/Horizon.app/resources/
 
+          # Create PkgInfo & Info.plist with Fullscreen Landscape configuration
           echo "APPL????" > Payload/Horizon.app/PkgInfo
 
           cat << 'EOF' > Payload/Horizon.app/Info.plist
