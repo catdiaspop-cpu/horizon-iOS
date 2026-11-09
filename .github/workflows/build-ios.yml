@@ -109,7 +109,8 @@ jobs:
           hdr_path = 'crates/horizon-hdr/src/lib.rs'
           with open(hdr_path, 'r', encoding='utf-8') as f:
               hdr_code = f.read()
-          stub = '#[cfg(target_os = "ios")]\npub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\n\n'
+          
+          stub = '#[cfg(target_os = "ios")]\npub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> { None }\n\n'
           if 'pub fn open_vulkan_device' in hdr_code and 'cfg(target_os = "ios")' not in hdr_code:
               hdr_code = hdr_code.replace('pub fn open_vulkan_device(', stub + 'pub fn open_vulkan_device(')
               with open(hdr_path, 'w', encoding='utf-8') as f:
