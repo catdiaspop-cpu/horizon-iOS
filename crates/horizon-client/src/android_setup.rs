@@ -1,4 +1,7 @@
-//! First run on Android: downloads and prepares the game files on the phone, without a PC or Java.
+//! First run of the phone builds: downloads and prepares the game files on the device, without
+//! a PC or Java. On Android `SetupActivity.java` is the screen and calls the `native*` functions
+//! below; on iOS the same engine is `horizon_client::setup`, driven by the game's own screen
+//! (`game/setup.rs`), so only the JNI half here is Android's.
 //!
 //! The Mojang files come straight from Mojang (piston-meta / piston-data and
 //! resources.download.minecraft.net), each checked by SHA-1, the client JAR against
@@ -434,11 +437,13 @@ fn run(home: &Path, derived: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "android")]
 fn jstring(env: &mut jni::JNIEnv, s: &jni::objects::JString) -> String {
     env.get_string(s).map(Into::into).unwrap_or_default()
 }
 
 /// 1 when the resources under `home` are ready to play.
+#[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeReady(
     mut env: jni::JNIEnv,
@@ -450,6 +455,7 @@ extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeReady(
 }
 
 /// The derived pack URL this build was made with (HORIZON_DERIVED_URL), else "".
+#[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeDefaultUrl<'a>(
     env: jni::JNIEnv<'a>,
@@ -461,6 +467,7 @@ extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeDefaultUrl<'a
 }
 
 /// Starts (or resumes) the setup on a background thread; does nothing while one runs.
+#[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeStart(
     mut env: jni::JNIEnv,
@@ -470,6 +477,12 @@ extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeStart(
 ) {
     let home = PathBuf::from(jstring(&mut env, &home));
     let url = jstring(&mut env, &url);
+    start(home, url);
+}
+
+/// Starts (or resumes) the setup on a background thread; does nothing while one runs. The
+/// Android screen comes here through JNI, the iOS one directly (`game/setup.rs`).
+pub fn start(home: PathBuf, url: String) {
     {
         let mut s = STATUS.lock().unwrap_or_else(|e| e.into_inner());
         if s.as_ref().is_some_and(|s| s.running) {
@@ -491,7 +504,44 @@ extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeStart(
     });
 }
 
+/// The derived pack's URL baked into this build (`HORIZON_DERIVED_URL`), else "".
+pub fn default_url() -> &'static str {
+    option_env!("HORIZON_DERIVED_URL").unwrap_or("")
+}
+
+/// What a setup screen shows: the stage, how much of it is done, and how it ended.
+#[derive(Clone, Debug, Default)]
+pub struct Progress {
+    /// `version`, `client`, `index`, `assets`, `derived`, `done`: the stages `run` goes through.
+    pub stage: String,
+    pub files_done: usize,
+    pub files_total: usize,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+    /// A setup thread runs right now.
+    pub running: bool,
+    /// It finished, and its resources are ready to play.
+    pub done: bool,
+    pub error: String,
+}
+
+/// [`Progress`] as it stands now.
+pub fn progress() -> Progress {
+    let s = STATUS.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default();
+    Progress {
+        stage: s.stage,
+        files_done: FILES_DONE.load(Ordering::Relaxed),
+        files_total: FILES_TOTAL.load(Ordering::Relaxed),
+        bytes_done: BYTES_DONE.load(Ordering::Relaxed),
+        bytes_total: BYTES_TOTAL.load(Ordering::Relaxed),
+        running: s.running,
+        done: s.done,
+        error: s.error,
+    }
+}
+
 /// "stage\tfilesDone\tfilesTotal\tbytesDone\tbytesTotal\tstate\terror", state = run/done/error/idle.
+#[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
 extern "system" fn Java_dev_horizonlab_horizon_SetupActivity_nativeStatus<'a>(
     env: jni::JNIEnv<'a>,

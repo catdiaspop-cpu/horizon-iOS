@@ -358,6 +358,8 @@ mod sculk_fixture;
 mod server_links;
 mod server_packs;
 mod server_travel;
+#[cfg(target_os = "ios")]
+mod setup;
 mod shader_packs;
 mod sheep_dye;
 mod shelf;
@@ -23159,24 +23161,34 @@ impl Loading {
 enum App {
     Loading(Box<Loading>),
     Ready(Box<split::Split<'static>>),
+    /// A phone build started without the game files: the download screen, which hands over to
+    /// `App::Loading` in the same event loop once they are here (`game/setup.rs`).
+    #[cfg(target_os = "ios")]
+    Setup(Box<setup::Setup>),
 }
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         match self {
             App::Loading(loading) => loading.resumed(event_loop),
             App::Ready(game) => game.resumed(event_loop),
+            #[cfg(target_os = "ios")]
+            App::Setup(setup) => setup.resumed(event_loop),
         }
     }
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {
         match self {
             App::Loading(loading) => loading.suspended(event_loop),
             App::Ready(game) => game.suspended(event_loop),
+            #[cfg(target_os = "ios")]
+            App::Setup(setup) => setup.suspended(event_loop),
         }
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match self {
             App::Loading(loading) => loading.window_event(event_loop, id, event),
             App::Ready(game) => game.window_event(event_loop, id, event),
+            #[cfg(target_os = "ios")]
+            App::Setup(setup) => setup.window_event(event_loop, id, event),
         }
     }
     fn device_event(&mut self, event_loop: &ActiveEventLoop, id: DeviceId, event: DeviceEvent) {
@@ -23188,6 +23200,9 @@ impl ApplicationHandler for App {
         enum Step {
             Waiting,
             Ready(Box<split::Split<'static>>),
+            /// The download finished: the loading screen takes over in this same loop.
+            #[cfg(target_os = "ios")]
+            Loaded(Box<Loading>),
             Done,
             Failed(Box<dyn std::error::Error>),
         }
@@ -23195,6 +23210,29 @@ impl ApplicationHandler for App {
             App::Ready(game) => {
                 game.about_to_wait(event_loop);
                 return;
+            }
+            #[cfg(target_os = "ios")]
+            App::Setup(setup) => {
+                setup.about_to_wait(event_loop);
+                if setup.error.is_some() {
+                    Step::Done
+                } else if setup.ready() {
+                    match setup.take_inputs() {
+                        Some((options, settings, vanilla_root, pack_error, started)) => {
+                            match make_loading(options, settings, vanilla_root, pack_error, started)
+                            {
+                                Ok(loading) => Step::Loaded(Box::new(loading)),
+                                Err(e) => {
+                                    setup.error = Some(e);
+                                    Step::Done
+                                }
+                            }
+                        }
+                        None => Step::Done,
+                    }
+                } else {
+                    Step::Waiting
+                }
             }
             App::Loading(loading) => {
                 loading.about_to_wait(event_loop);
@@ -23220,6 +23258,14 @@ impl ApplicationHandler for App {
         match step {
             Step::Waiting => {}
             Step::Ready(game) => *self = App::Ready(game),
+            #[cfg(target_os = "ios")]
+            Step::Loaded(loading) => {
+                // No `resumed` comes for a state that did not start with the loop: the loading
+                // screen opens its window here.
+                let mut loading = loading;
+                loading.resumed(event_loop);
+                *self = App::Loading(loading);
+            }
             Step::Done => event_loop.exit(),
             Step::Failed(e) => {
                 if let App::Loading(loading) = self {
@@ -23311,7 +23357,77 @@ fn run_loading(
     vanilla_root: PathBuf,
     pack_error: Option<String>,
     started: Instant,
+    startup: Startup,
 ) -> Result<()> {
+    let mut app = match startup {
+        Startup::Loading => App::Loading(Box::new(make_loading(
+            options,
+            settings,
+            vanilla_root,
+            pack_error,
+            started,
+        )?)),
+        // A phone build without the game files downloads them here, then loads them.
+        #[cfg(target_os = "ios")]
+        Startup::Setup => App::Setup(Box::new(setup::Setup::new(
+            options,
+            settings,
+            vanilla_root,
+            pack_error,
+            started,
+        ))),
+    };
+    let result = new_event_loop()?.run_app(&mut app);
+    narrator::stop();
+    match &mut app {
+        // Ready: splitscreen around P1's game.
+        App::Ready(split) => leave_fullscreen_after(&result, &mut split.host.settings),
+        App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
+        #[cfg(target_os = "ios")]
+        App::Setup(setup) => leave_fullscreen_after(&result, &mut setup.settings),
+    }
+    result?;
+    horizon_client::discord_presence::stop();
+    match app {
+        App::Ready(mut split) => {
+            write_report(&split.host)?;
+            if let Some(e) = split.host.error.take() {
+                return Err(e);
+            }
+        }
+        App::Loading(loading) => {
+            if let Some(e) = loading.error {
+                return Err(e);
+            }
+        }
+        #[cfg(target_os = "ios")]
+        App::Setup(mut setup) => {
+            if let Some(e) = setup.error.take() {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Where the startup loop begins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Startup {
+    /// The ordinary launch: the game files are prepared, so the loading screen goes first.
+    Loading,
+    /// A phone build started without them: the download screen goes first (`setup`).
+    #[cfg(target_os = "ios")]
+    Setup,
+}
+
+/// The loading screen's app state, from the launch's inputs.
+fn make_loading(
+    options: Options,
+    settings: Settings,
+    vanilla_root: PathBuf,
+    pack_error: Option<String>,
+    started: Instant,
+) -> Result<Loading> {
     let progress = Progress::new();
     let (receiver, loader) =
         startup_menu::spawn_loader(&options, &settings, &vanilla_root, started, &progress)?;
@@ -23341,30 +23457,7 @@ fn run_loading(
         error: None,
         touch_finger: None,
     };
-    let mut app = App::Loading(Box::new(loading));
-    let result = new_event_loop()?.run_app(&mut app);
-    narrator::stop();
-    match &mut app {
-        // Ready: splitscreen around P1's game.
-        App::Ready(split) => leave_fullscreen_after(&result, &mut split.host.settings),
-        App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
-    }
-    result?;
-    horizon_client::discord_presence::stop();
-    match app {
-        App::Ready(mut split) => {
-            write_report(&split.host)?;
-            if let Some(e) = split.host.error.take() {
-                return Err(e);
-            }
-        }
-        App::Loading(loading) => {
-            if let Some(e) = loading.error {
-                return Err(e);
-            }
-        }
-    }
-    Ok(())
+    Ok(loading)
 }
 
 pub use launch_api::{UsageError, exit_code};
@@ -23431,9 +23524,20 @@ pub fn run_with() -> Result<()> {
         // launcher: a window says where to get it. Scripts and servers get
         // the error.
         if !options.offscreen && !synchronous_startup(&options) {
-            log::error!("Horizon: {error}");
             let settings = Settings::load(&Game::options_path());
-            return no_resources::show(&vanilla_root, &settings);
+            #[cfg(target_os = "ios")]
+            {
+                // A phone has no launcher to go back to, and one `UIApplicationMain` per
+                // process: this app downloads the files on its own screen, then loads them
+                // in the same event loop (`game/setup.rs`, `Startup::Setup`).
+                log::info!("Horizon: {error}");
+                return run_loading(options, settings, vanilla_root, None, started, Startup::Setup);
+            }
+            #[cfg(not(target_os = "ios"))]
+            {
+                log::error!("Horizon: {error}");
+                return no_resources::show(&vanilla_root, &settings);
+            }
         }
         return Err(error.into());
     }
@@ -23485,7 +23589,14 @@ pub fn run_with() -> Result<()> {
     // shared resources.
     Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
     if !synchronous_startup(&options) {
-        return run_loading(options, early_settings, vanilla_root, None, started);
+        return run_loading(
+            options,
+            early_settings,
+            vanilla_root,
+            None,
+            started,
+            Startup::Loading,
+        );
     }
     let mut pack_error = None;
     options.resources = packs::startup_root(&vanilla_root, &early_settings.resource_packs, &[])

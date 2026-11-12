@@ -11,4 +11,9 @@ extern crate self as horizon_client;
 pub use horizon_client_lib::*;
 pub mod entry;
 pub mod game;
+/// The first run's download of the game files, the engine Android's `SetupActivity` uses
+/// through JNI: on iOS the JNI half is compiled out and `game/setup.rs` drives it directly.
+#[cfg(target_os = "ios")]
+#[path = "android_setup.rs"]
+pub mod setup;
 pub mod mod_api;

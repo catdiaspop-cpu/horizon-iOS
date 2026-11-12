@@ -44,7 +44,24 @@ Or copy `Horizon.ipa` to the device (AltStore, Sideloadly) or open it in the sim
 
 Horizon never ships Minecraft's files. `fetch_assets.py` downloads the manifest, the client and
 server jars, the libraries and every asset object into `.minecraft`; `horizon-prepare` turns them
-into `.local/horizon-client/26.3`, which the IPA carries in `Horizon.app/resources`.
+into `.local/horizon-client/26.3`, which `build_ipa.sh` copies into `Horizon.app/resources` when it
+is there. Such an IPA carries the game and starts playing right away.
+
+An IPA built without them — or one whose files are wanted fresh — downloads the files itself on
+its first run, on the screen of `game/setup.rs` (`Download`): Mojang's manifest, client jar, asset
+index and assets, each checked by SHA-1 against `research-lock.json`, into
+`Documents/resources`. The engine is the one Android's `SetupActivity` drives through JNI
+(`crates/horizon-client/src/android_setup.rs`, compiled as `horizon_client::setup` on iOS), so
+both phones download the same way, with the same resume of a broken download.
+
+One part only Java makes: `horizon-derived.zip` (about 4 MB — the fonts, the panorama, the
+languages and facts the vanilla exporters produce). On Android the player builds it on a PC with
+`packaging/android/make_derived_pack.sh`; on iOS the same, then into the app folder: **Files >
+On My iPhone > Horizon > horizon-derived.zip**, or `HORIZON_DERIVED_URL=<link>` on `build_ipa.sh`
+to bake a download link in (`setup::default_url`).
+
+`entry::prepare_platform` names that folder in `HORIZON_RESOURCES`: the bundle's `resources` when
+the build carries them, else `Documents/resources`.
 
 The game folder is the app's `Documents`, shown in the **Files** app under *On My iPhone >
 Horizon* (`UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` in the Info.plist):
@@ -58,7 +75,8 @@ iTunes, the Files app or iCloud Drive.
 | `horizon-client-render/src/gfx.rs` | `backend_order` picks Metal on `macos` and `ios`; `horizon_hdr::open_vulkan_device` is not called; the driver-failure message names Metal |
 | `horizon-client-render/Cargo.toml` | the `metal` wgpu feature is the only one for Apple targets; `vulkan` and `gles` are compiled for Windows/Linux/Android only |
 | `horizon-hdr` | Vulkan's `VK_EXT_hdr_metadata` and its `ash` dependency exist only off Apple's platforms; Metal's HDR is the swapchain's colour space, which wgpu sets |
-| `horizon-client/src/entry.rs` | `prepare_platform` sets `HORIZON_HOME` to `Documents`, `HORIZON_CACHE` to `Library/Caches` and makes the game folder the working directory |
+| `horizon-client/src/entry.rs` | `prepare_platform` sets `HORIZON_HOME` to `Documents`, `HORIZON_CACHE` to `Library/Caches`, `HORIZON_RESOURCES` to the bundle's `resources` or `Documents/resources`, and makes the game folder the working directory |
+| `horizon-client/src/game/setup.rs` | the first run's download screen: one `UIApplicationMain` per process means it is a state of the game's loop (`App::Setup`), which hands over to `App::Loading` when the files are in |
 | `horizon-client/src/game.rs` | the mobile lifecycle (`resumed`/`suspended`, the background flag). `Game::sync_ime` shows the keyboard through winit's `set_ime_allowed`, which is `becomeFirstResponder` on iOS |
 | `horizon-client/src/game/touch.rs` | touch controls, on-screen buttons and the close button are the phone platforms' (Android and iOS) |
 | `horizon-client-input` | no `arboard` clipboard (the game keeps its own), no "key without modifiers" (the soft keyboard has none) |
@@ -75,3 +93,6 @@ iTunes, the Files app or iCloud Drive.
   (`game/ime.rs`, `SOFT_KEYBOARD`), rather than by the keyboard's real height.
 - **No Java servers' profile page.** The name-and-skin screen is the Android activity's; iOS has
   no such page and shows no profile button.
+- **Signing in needs a browser hop.** Minecraft accounts sign in through Microsoft's pages, which
+  the Android build opens in an activity (`android_msa.rs`); iOS has no such bridge yet, so online
+  play is direct-IP/offline-mode servers for now.

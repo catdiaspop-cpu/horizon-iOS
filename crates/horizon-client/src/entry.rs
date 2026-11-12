@@ -26,10 +26,22 @@ fn prepare_platform() {
     for dir in ["saves", "resourcepacks", "mods", "shaderpacks"] {
         let _ = std::fs::create_dir_all(home.join(dir));
     }
+    // The prepared game files: a build can ship them in the bundle ("resources" beside the
+    // executable, as on a desktop); a build without them downloads them into the game folder on
+    // its first run, on the download screen (`horizon_client::setup`, `game/setup.rs`). Either
+    // way the game reads one folder, the one named here.
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("resources")));
+    let resources = match bundled {
+        Some(dir) if dir.join("horizon-resources.json").is_file() => dir,
+        _ => home.join("resources"),
+    };
     // SAFETY: nothing else runs yet; the game reads these on this thread.
     unsafe {
         std::env::set_var("HORIZON_HOME", &home);
         std::env::set_var("HORIZON_CACHE", &cache);
+        std::env::set_var("HORIZON_RESOURCES", &resources);
         if std::env::var_os("TMPDIR").is_none() {
             let tmp = container.join("tmp");
             let _ = std::fs::create_dir_all(&tmp);
