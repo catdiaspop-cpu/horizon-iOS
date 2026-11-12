@@ -3,6 +3,10 @@ name: Build Horizon iOS (.ipa)
 # Builds the game for iOS on Apple silicon: Metal through wgpu, no patches applied at build
 # time. The platform is part of the source (`cfg(target_os = "ios")` beside the Android ones),
 # so what CI builds is what the repository says, byte for byte. See IOS.md.
+#
+# Run it from the Actions tab (Workflow "Build Horizon iOS (.ipa)" -> Run workflow). A workflow
+# only shows that button when this file is on the default branch; before then, open the pull
+# request's Checks tab and press "Re-run jobs".
 on:
   workflow_dispatch:
   push:
@@ -44,6 +48,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-ios-
 
+      # Before the slow part: Mojang's ~525 MB and horizon-prepare take ten minutes, and a
+      # broken `cfg(target_os = "ios")` should not wait for them.
+      - name: Compile check first
+        run: |
+          set -o pipefail
+          cargo check --target aarch64-apple-ios \
+            -p horizon-client --bin horizon-client \
+            --no-default-features --features audio 2>&1 | tee check.log
+
       - name: Fetch Minecraft 26.3 files
         run: python3 packaging/ios/fetch_assets.py .minecraft
 
@@ -53,7 +66,9 @@ jobs:
           --prepare --minecraft-dir .minecraft --server-jar server.jar
 
       - name: Build the app and package the IPA
-        run: ./packaging/ios/build_ipa.sh
+        run: |
+          set -o pipefail
+          ./packaging/ios/build_ipa.sh 2>&1 | tee build.log
 
       - name: Upload Horizon.ipa
         uses: actions/upload-artifact@v4
@@ -61,3 +76,42 @@ jobs:
           name: Horizon-iOS
           path: target/ios/Horizon.ipa
           if-no-files-found: error
+
+      # A failed build's log, for whoever has to read the errors: the Actions log download
+      # lives on a host some clients can't reach, an artifact travels with the run.
+      - name: Upload the logs when something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Horizon-iOS-logs
+          path: |
+            check.log
+            build.log
+          if-no-files-found: ignore
+
+      - name: Annotate the first errors
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, re
+          lines = []
+          for name in ("build.log", "check.log"):
+              try:
+                  lines += open(name, encoding="utf-8", errors="replace").read().splitlines()
+              except OSError:
+                  pass
+          errors = [l for l in lines if re.match(r"^\s*(error(\[E\d+\])?:|--> )", l)]
+          for line in errors[:40]:
+              print("::error::" + line.replace("%", "%25").replace("\r", ""))
+          print(f"{len(errors)} error line(s) in {len(lines)} log line(s)")
+          for line in lines[-40:]:
+              print(line)
+          PY
+
+      - name: Note a stale Cargo.lock
+        if: always()
+        run: |
+          if ! git diff --quiet -- Cargo.lock; then
+            echo "::warning file=Cargo.lock::Cargo.lock changed during the build; commit it"
+            git diff --stat -- Cargo.lock
+          fi
