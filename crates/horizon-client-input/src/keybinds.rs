@@ -300,7 +300,9 @@ pub use horizon_client_core::key_display::display_name;
 /// Q key shows A.
 pub fn learn_layout(event: &winit::event::KeyEvent) {
     use winit::keyboard::{Key, PhysicalKey};
-    #[cfg(not(target_os = "android"))]
+    // A phone's soft keyboard reports no "key without modifiers": the logical key is all
+    // it has, on Android and iOS alike.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
     let PhysicalKey::Code(code) = event.physical_key else {
         return;
@@ -309,9 +311,9 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
         return;
     };
     let learn = horizon_client_core::key_display::learn_layout;
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     let key = event.logical_key.clone();
-    #[cfg(not(target_os = "android"))]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let key = event.key_without_modifiers();
     match key {
         Key::Character(text) => learn(name, &text),

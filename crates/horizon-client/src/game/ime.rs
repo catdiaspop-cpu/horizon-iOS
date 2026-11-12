@@ -3,6 +3,13 @@
 //! The window only asks the OS for an input method while such a field has
 //! focus, so movement keys keep arriving as plain key events.
 use super::{Game, Screen, books::BookScreen};
+
+/// Whether the window's input method is up. iOS draws its keyboard over the window rather
+/// than shrinking it, and winit reports no height for it, so the chat takes the share of the
+/// screen a phone keyboard covers (`chat_lift`).
+#[cfg(target_os = "ios")]
+pub(super) static SOFT_KEYBOARD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 use horizon_client::{
     hud::HudBatch,
     preedit::{self, PreeditEvent},
@@ -50,6 +57,8 @@ impl Game<'_> {
         {
             window.set_ime_allowed(want);
             self.ime_allowed = want;
+            #[cfg(target_os = "ios")]
+            SOFT_KEYBOARD.store(want, std::sync::atomic::Ordering::Relaxed);
             // The field lost the focus (or a new one took it): the composition
             // and the candidate window's place belong to the old one.
             self.ime_area = None;

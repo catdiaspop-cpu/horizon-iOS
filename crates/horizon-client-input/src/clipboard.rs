@@ -111,8 +111,9 @@ pub fn helper_clipboard_contents(clipboard: &str) -> String {
     strip_formatting(&clipboard.replace('\r', ""))
 }
 
-/// Android has no arboard backend: the game keeps its own in-memory clipboard there.
-#[cfg(target_os = "android")]
+/// Android and iOS have no arboard backend: the game keeps its own in-memory clipboard
+/// there (the system's needs a Java or a UIKit view).
+#[cfg(any(target_os = "android", target_os = "ios"))]
 mod arboard {
     pub enum Error {
         ContentNotAvailable,

@@ -8590,9 +8590,12 @@ impl Game<'_> {
         // repeat) flips them when toggling; only releases reach them
         // behind a screen (KeyboardHandler.keyPress).
         let toggle = match key {
-            // A hardware keyboard on Android holds to sneak, as on the
-            // desktop with hold mode: the toggle option is for touch.
-            KeyCode::ShiftLeft if cfg!(target_os = "android") && source == Source::Keyboard => {
+            // A hardware keyboard on a phone (Android's or an iPad's) holds to sneak, as on
+            // the desktop with hold mode: the toggle option is for touch.
+            KeyCode::ShiftLeft
+                if cfg!(any(target_os = "android", target_os = "ios"))
+                    && source == Source::Keyboard =>
+            {
                 if repeat {
                     return Ok(());
                 }
@@ -8877,13 +8880,18 @@ impl Game<'_> {
                 None
             };
             self.captured = self.capture_mode.is_some();
-            // Android has no pointer to grab: touch turns the view (game/touch.rs).
-            #[cfg(target_os = "android")]
+            // A phone has no pointer to grab: touch turns the view (game/touch.rs).
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             {
                 self.captured = true;
             }
             // Windows already warped above, inside the clip's own position.
-            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
+            #[cfg(not(any(
+                target_os = "macos",
+                target_os = "windows",
+                target_os = "android",
+                target_os = "ios"
+            )))]
             if self.captured && self.focused {
                 warp(window);
             }
@@ -18447,10 +18455,10 @@ fn autosave_interval(rate: f32) -> i64 {
 impl ApplicationHandler for Game<'_> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
-            // Android: the native window is back after the app was in the background.
-            #[cfg(target_os = "android")]
+            // A phone: the native window is back after the app was in the background.
+            #[cfg(any(target_os = "android", target_os = "ios"))]
             {
-                ANDROID_BACKGROUND.store(false, Ordering::Relaxed);
+                MOBILE_BACKGROUND.store(false, Ordering::Relaxed);
                 self.audio.set_output_paused(false);
                 // The time away is not simulated in one go when the loop wakes up.
                 self.previous = Instant::now();
@@ -18556,9 +18564,9 @@ impl ApplicationHandler for Game<'_> {
         // Home or another app: the game freezes. A world opens the pause menu (single player
         // stops its server ticking), the sound output stops and the loop sleeps until the
         // window is back.
-        #[cfg(target_os = "android")]
+        #[cfg(any(target_os = "android", target_os = "ios"))]
         {
-            ANDROID_BACKGROUND.store(true, Ordering::Relaxed);
+            MOBILE_BACKGROUND.store(true, Ordering::Relaxed);
             event_loop.set_control_flow(ControlFlow::Wait);
             if self.player.is_some()
                 && self.title.is_none()
@@ -18577,6 +18585,7 @@ impl ApplicationHandler for Game<'_> {
                 server.set_paused(true);
             }
             self.touch_release_all();
+            #[cfg(target_os = "android")]
             android_input::reset();
             self.touch.pointer_captured = None;
             self.audio.set_output_paused(true);
@@ -20235,8 +20244,8 @@ impl Game<'_> {
             return;
         }
         // In the background nothing is simulated or drawn: the loop waits for `resumed`.
-        #[cfg(target_os = "android")]
-        if ANDROID_BACKGROUND.load(Ordering::Relaxed) {
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        if MOBILE_BACKGROUND.load(Ordering::Relaxed) {
             event_loop.set_control_flow(ControlFlow::Wait);
             return;
         }
@@ -20264,8 +20273,8 @@ impl Game<'_> {
             );
             return;
         }
-        #[cfg(target_os = "android")]
-        if ANDROID_BACKGROUND.load(Ordering::Relaxed) {
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        if MOBILE_BACKGROUND.load(Ordering::Relaxed) {
             event_loop.set_control_flow(ControlFlow::Wait);
             return;
         }
@@ -22696,9 +22705,11 @@ fn new_event_loop() -> std::result::Result<EventLoop<()>, winit::error::EventLoo
 pub static ANDROID_APP: std::sync::OnceLock<winit::platform::android::activity::AndroidApp> =
     std::sync::OnceLock::new();
 
-/// The activity is stopped (Home or another app). The loop waits instead of spinning.
-#[cfg(target_os = "android")]
-static ANDROID_BACKGROUND: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The app is stopped (Home, or another app over it). The loop waits instead of spinning:
+/// Android's activity is stopped, and iOS's scene is in the background, where its draws stall.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+static MOBILE_BACKGROUND: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Quit Game ended the native loop. Ask the activity to die so the next launch
 /// is a new process, not a resumed black window.

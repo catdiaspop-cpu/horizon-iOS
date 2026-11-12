@@ -1,9 +1,16 @@
 name: Build Horizon iOS (.ipa)
 
+# Builds the game for iOS on Apple silicon: Metal through wgpu, no patches applied at build
+# time. The platform is part of the source (`cfg(target_os = "ios")` beside the Android ones),
+# so what CI builds is what the repository says, byte for byte. See IOS.md.
 on:
   workflow_dispatch:
   push:
-    branches: [ "android-port", "main", "master" ]
+    branches: ["android-port", "main", "master"]
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-ios:
@@ -15,237 +22,42 @@ jobs:
         with:
           submodules: true
 
-      - name: Setup Java 25 (Required for horizon-prepare exporters)
+      - name: Setup Java 25 (horizon-prepare's exporters)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '25'
+          distribution: "temurin"
+          java-version: "25"
 
-      - name: Install Rust toolchain & iOS Target
+      - name: Install Rust toolchain and the iOS target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios
 
-      - name: Cache Cargo Dependencies
+      - name: Cache Cargo dependencies and builds
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target/
+            target
           key: ${{ runner.os }}-cargo-ios-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-ios-
 
-      - name: Apply Metal API & iOS Compatibility Patches
-        run: |
-          cat << 'EOF' > patch_ios.py
-          import os
+      - name: Fetch Minecraft 26.3 files
+        run: python3 packaging/ios/fetch_assets.py .minecraft
 
-          def patch_file(path, old, new):
-              if not os.path.exists(path):
-                  print(f"Error: {path} not found")
-                  return
-              with open(path, 'r', encoding='utf-8') as f:
-                  content = f.read()
-              if old not in content:
-                  print(f"WARNING: pattern not found in {path}")
-              content = content.replace(old, new)
-              with open(path, 'w', encoding='utf-8') as f:
-                  f.write(content)
-              print(f"Successfully patched {path}")
+      - name: Prepare the game's resources
+        run: >-
+          cargo run --release -p horizon-prepare --
+          --prepare --minecraft-dir .minecraft --server-jar server.jar
 
-          # 1. Force Metal backend in wgpu & fix NO_GPU_DRIVER
-          patch_file('crates/horizon-client-render/src/gfx.rs', 
-                     'if os == "macos" || wgpu_backend', 
-                     'if os == "macos" || os == "ios" || wgpu_backend')
+      - name: Build the app and package the IPA
+        run: ./packaging/ios/build_ipa.sh
 
-          patch_file('crates/horizon-client-render/src/graphics.rs', 
-                     'if os == "macos" || wgpu_backend', 
-                     'if os == "macos" || os == "ios" || wgpu_backend')
-
-          patch_file('crates/horizon-client-render/src/gfx.rs', 
-                     'not(any(target_os = "windows", target_os = "macos"))', 
-                     'not(any(target_os = "windows", target_os = "macos", target_os = "ios"))')
-
-          gfx_path = 'crates/horizon-client-render/src/gfx.rs'
-          with open(gfx_path, 'r', encoding='utf-8') as f:
-              code = f.read()
-          target_str = '#[cfg(target_os = "macos")]\nconst NO_GPU_DRIVER: &str = "No Metal graphics device found";'
-          replacement_str = target_str + '\n#[cfg(target_os = "ios")]\nconst NO_GPU_DRIVER: &str = "No Metal graphics device found on iOS";'
-          if 'const NO_GPU_DRIVER: &str = "No Metal graphics device found on iOS";' not in code:
-              code = code.replace(target_str, replacement_str)
-              with open(gfx_path, 'w', encoding='utf-8') as f:
-                  f.write(code)
-
-          # 2. Allow unsafe_code lint for iOS in horizon-client lib.rs
-          patch_file('crates/horizon-client/src/lib.rs', 
-                     'not(target_os = "android")', 
-                     'not(any(target_os = "android", target_os = "ios"))')
-
-          # 3. Treat iOS like Android for input/clipboard
-          patch_file('crates/horizon-client-input/Cargo.toml', 
-                     'not(target_os = "android")', 
-                     'not(any(target_os = "android", target_os = "ios"))')
-          patch_file('crates/horizon-client-input/src/clipboard.rs', 
-                     'target_os = "android"', 
-                     'any(target_os = "android", target_os = "ios")')
-          patch_file('crates/horizon-client-input/src/keybinds.rs', 
-                     'target_os = "android"', 
-                     'any(target_os = "android", target_os = "ios")')
-
-          # 4. Fix memory profiling syscalls restricted by iOS Sandbox
-          patch_file('crates/horizon-threads/src/process_memory.rs', 
-                     'target_vendor = "apple"', 
-                     'target_os = "macos"')
-
-          # 5. Completely stub out horizon-hdr for iOS to avoid any Vulkan reference errors
-          hdr_path = 'crates/horizon-hdr/src/lib.rs'
-          with open(hdr_path, 'w', encoding='utf-8') as f:
-              f.write('''
-              pub fn open_vulkan_device(_adapter: &wgpu::Adapter, _desc: &wgpu::DeviceDescriptor<'_>) -> Option<Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> {
-                  None
-              }
-              pub fn set_metadata(_device: &wgpu::Device, _surface: &wgpu::Surface<'_>, _paper_white: f32, _peak: f32, _black: f32) {}
-              ''')
-          print("Stubbed horizon-hdr for iOS successfully")
-          EOF
-          python3 patch_ios.py
-
-      - name: Download Mojang 26.3 Game Assets & Prepare Resources
-        run: |
-          python3 -c "
-          import os, json, urllib.request
-          from concurrent.futures import ThreadPoolExecutor
-
-          mc_dir = os.path.abspath('.minecraft')
-          ver_dir = os.path.join(mc_dir, 'versions', '26.3')
-          os.makedirs(ver_dir, exist_ok=True)
-
-          print('[+] Downloading Minecraft 26.3 Manifest...')
-          req = urllib.request.Request('https://piston-meta.mojang.com/v1/packages/80608ff6753705b6a82e2cb86a5937d4d233abd4/26.3.json', headers={'User-Agent': 'Mozilla/5.0'})
-          with urllib.request.urlopen(req) as r, open(os.path.join(ver_dir, '26.3.json'), 'wb') as f:
-              ver_bytes = r.read()
-              f.write(ver_bytes)
-          ver_json = json.loads(ver_bytes)
-
-          print('[+] Downloading Minecraft 26.3 Client JAR...')
-          req = urllib.request.Request(ver_json['downloads']['client']['url'], headers={'User-Agent': 'Mozilla/5.0'})
-          with urllib.request.urlopen(req) as r, open(os.path.join(ver_dir, '26.3.jar'), 'wb') as f:
-              f.write(r.read())
-
-          print('[+] Downloading Minecraft 26.3 Server JAR...')
-          req = urllib.request.Request('https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar', headers={'User-Agent': 'Mozilla/5.0'})
-          with urllib.request.urlopen(req) as r, open('server.jar', 'wb') as f:
-              f.write(r.read())
-
-          print('[+] Downloading Asset Index 34.json...')
-          idx_dir = os.path.join(mc_dir, 'assets', 'indexes')
-          os.makedirs(idx_dir, exist_ok=True)
-          req = urllib.request.Request(ver_json['assetIndex']['url'], headers={'User-Agent': 'Mozilla/5.0'})
-          with urllib.request.urlopen(req) as r, open(os.path.join(idx_dir, '34.json'), 'wb') as f:
-              idx_bytes = r.read()
-              f.write(idx_bytes)
-          idx_json = json.loads(idx_bytes)
-
-          libs_dir = os.path.join(mc_dir, 'libraries')
-          assets_dir = os.path.join(mc_dir, 'assets', 'objects')
-          tasks = []
-
-          for lib in ver_json.get('libraries', []):
-              if 'downloads' in lib and 'artifact' in lib['downloads']:
-                  art = lib['downloads']['artifact']
-                  tasks.append((art['url'], os.path.join(libs_dir, art['path'])))
-
-          for name, obj in idx_json.get('objects', {}).items():
-              h = obj['hash']
-              tasks.append((f'https://resources.download.minecraft.net/{h[:2]}/{h}', os.path.join(assets_dir, h[:2], h)))
-
-          def fetch(item):
-              url, path = item
-              if os.path.exists(path): return
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              try:
-                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                  with urllib.request.urlopen(req) as r, open(path, 'wb') as f:
-                      f.write(r.read())
-              except Exception:
-                  pass
-
-          print(f'[+] Downloading {len(tasks)} Mojang dependencies & assets...')
-          with ThreadPoolExecutor(max_workers=20) as pool:
-              list(pool.map(fetch, tasks))
-          print('[+] All Mojang assets downloaded!')
-          "
-
-          echo "[+] Running horizon-prepare exporters..."
-          cargo run --release -p horizon-prepare -- --prepare --minecraft-dir .minecraft --server-jar server.jar
-
-      - name: Build Horizon Native iOS Binary
-        run: |
-          cargo build --target aarch64-apple-ios --release -p horizon-client
-
-      - name: Assemble iOS App Bundle & Package Resources
-        run: |
-          mkdir -p Payload/Horizon.app
-          cp target/aarch64-apple-ios/release/horizon Payload/Horizon.app/Horizon
-          chmod +x Payload/Horizon.app/Horizon
-
-          # Copy full prepared 26.3 game resources into App Bundle
-          mkdir -p Payload/Horizon.app/resources
-          cp -R .local/horizon-client/26.3/* Payload/Horizon.app/resources/
-
-          # Create PkgInfo & Info.plist with Fullscreen Landscape configuration
-          echo "APPL????" > Payload/Horizon.app/PkgInfo
-
-          cat << 'EOF' > Payload/Horizon.app/Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>Horizon</string>
-              <key>CFBundleIdentifier</key>
-              <string>dev.horizonlab.horizon</string>
-              <key>CFBundleName</key>
-              <string>Horizon</string>
-              <key>CFBundleDisplayName</key>
-              <string>Horizon</string>
-              <key>CFBundleVersion</key>
-              <string>1.0</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>LSRequiresIPhoneOS</key>
-              <true/>
-              <key>UIRequiresFullScreen</key>
-              <true/>
-              <key>UIStatusBarHidden</key>
-              <true/>
-              <key>UIViewControllerBasedStatusBarAppearance</key>
-              <false/>
-              <key>UILaunchScreen</key>
-              <dict/>
-              <key>UISupportedInterfaceOrientations</key>
-              <array>
-                  <string>UIInterfaceOrientationLandscapeLeft</string>
-                  <string>UIInterfaceOrientationLandscapeRight</string>
-              </array>
-              <key>UIFileSharingEnabled</key>
-              <true/>
-              <key>LSSupportsOpeningDocumentsInPlace</key>
-              <true/>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Create Unsigned IPA Package
-        run: |
-          zip -r Horizon.ipa Payload
-
-      - name: Upload Horizon.ipa Artifact
+      - name: Upload Horizon.ipa
         uses: actions/upload-artifact@v4
         with:
           name: Horizon-iOS
-          path: Horizon.ipa
+          path: target/ios/Horizon.ipa
+          if-no-files-found: error

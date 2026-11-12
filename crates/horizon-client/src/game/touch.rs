@@ -22,7 +22,9 @@
 //! The editor moves (drag), resizes and fades each control, hides or shows
 //! it, and saves to `touch_layout.json` in the game directory.
 //!
-//! A focused text field brings up the soft keyboard (`android_ime`).
+//! A focused text field brings up the soft keyboard: Android's through the activity
+//! (`android_ime`), iOS's through the window's own input method (`game/ime.rs`), which the
+//! game asks for on every platform a frame after the focus moves.
 use super::event_loop::EventLoopCtl;
 use super::Game;
 use horizon_client::{
@@ -468,7 +470,11 @@ impl Default for Touches {
             trigger_release: [0; 2],
             sneaking: false,
             sprinting: false,
-            layout: if cfg!(target_os = "android") { TouchLayout::load() } else { TouchLayout::default() },
+            layout: if cfg!(any(target_os = "android", target_os = "ios")) {
+                TouchLayout::load()
+            } else {
+                TouchLayout::default()
+            },
             pressing: None,
             editing: false,
             selected: None,
@@ -479,7 +485,11 @@ impl Default for Touches {
             hardware: false,
             mouse: false,
             pointer_captured: None,
-            buttons: if cfg!(target_os = "android") { load_buttons() } else { Vec::new() },
+            buttons: if cfg!(any(target_os = "android", target_os = "ios")) {
+                load_buttons()
+            } else {
+                Vec::new()
+            },
             selected_button: None,
         }
     }
@@ -824,20 +834,24 @@ impl Game<'_> {
     }
 
     fn touch_controls_shown(&self) -> bool {
-        cfg!(target_os = "android") && self.player.is_some() && !self.pad_in_menu() && !self.touch.hardware
+        cfg!(any(target_os = "android", target_os = "ios"))
+            && self.player.is_some()
+            && !self.pad_in_menu()
+            && !self.touch.hardware
     }
 
     /// Over a screen in the world (inventory, containers, pause, chat...):
     /// a close button, as Escape.
     fn touch_close_shown(&self) -> bool {
-        cfg!(target_os = "android")
+        cfg!(any(target_os = "android", target_os = "ios"))
             && self.player.is_some()
             && self.title.is_none()
             && self.pad_in_menu()
             && !self.touch_text_focused()
     }
 
-    /// On the title or pause screen: the profile button.
+    /// On the title or pause screen: the profile button. Android's own screen (the
+    /// activity's name and skin page): iOS has no such page, so no button.
     fn touch_profile_shown(&self) -> bool {
         cfg!(target_os = "android")
             && !self.touch_text_focused()

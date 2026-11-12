@@ -6,8 +6,51 @@ pub fn main() {
     main_with(Default::default());
 }
 
+/// The phone's folders, before anything reads them. Android's entry point does this from the
+/// activity's paths (`android_main.rs`); iOS's from its own container, because the executable's
+/// `main` is what iOS runs, on the main thread where winit's event loop must be made.
+#[cfg(target_os = "ios")]
+fn prepare_platform() {
+    use std::path::PathBuf;
+    let Some(container) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return;
+    };
+    // `Documents` is the part of the container the Files app shows (`UIFileSharingEnabled`
+    // in the bundle's Info.plist): saves, resource packs and mods live there.
+    let home = container.join("Documents");
+    // What the OS may clear under memory pressure: the pack caches and the like.
+    let cache = container.join("Library").join("Caches").join("horizon-cache");
+    let _ = std::fs::create_dir_all(&home);
+    let _ = std::fs::create_dir_all(&cache);
+    // The folders players drop things into, ready in the Files app's Horizon folder.
+    for dir in ["saves", "resourcepacks", "mods", "shaderpacks"] {
+        let _ = std::fs::create_dir_all(home.join(dir));
+    }
+    // SAFETY: nothing else runs yet; the game reads these on this thread.
+    unsafe {
+        std::env::set_var("HORIZON_HOME", &home);
+        std::env::set_var("HORIZON_CACHE", &cache);
+        if std::env::var_os("TMPDIR").is_none() {
+            let tmp = container.join("tmp");
+            let _ = std::fs::create_dir_all(&tmp);
+            std::env::set_var("TMPDIR", &tmp);
+        }
+        // `spikes.txt` in the game folder (a number of milliseconds) turns on HORIZON_SPIKES:
+        // frames slower than that log their timings, without a debug build (as on Android).
+        if let Ok(text) = std::fs::read_to_string(home.join("spikes.txt"))
+            && text.trim().parse::<f32>().is_ok()
+        {
+            std::env::set_var("HORIZON_SPIKES", text.trim());
+        }
+    }
+    // The game folder is the working directory, as the launcher makes it on a desktop.
+    let _ = std::env::set_current_dir(&home);
+}
+
 /// Start the game with trait mods in dispatch order.
 pub fn main_with(mods: crate::mod_api::Mods) {
+    #[cfg(target_os = "ios")]
+    prepare_platform();
     // First: a trait injection into anything below (logging, the crash handler) calls its mod.
     if crate::mod_api::MODS.set(mods).is_err() {
         log::warn!("Trait mods already installed; ignoring the second list");

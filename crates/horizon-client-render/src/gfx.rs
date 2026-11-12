@@ -1519,14 +1519,14 @@ fn requested_split() -> Option<u32> {
         .and_then(|v| v.parse().ok())
         .filter(|&n| (1..=SPRITE_SPLIT).contains(&n))
 }
-/// Fast Opaque Pass on Android (`Renderer::set_opaque_split`).
-static ANDROID_SPLIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+/// Fast Opaque Pass on the phones (`Renderer::set_opaque_split`).
+static MOBILE_SPLIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 /// Solid terrain in two passes (`Renderer::opaque_split`).
 fn split_solid_on(backend: wgpu::Backend, no_gpu_culling: bool) -> bool {
     backend == wgpu::Backend::Metal
-        || (cfg!(target_os = "android")
+        || (cfg!(any(target_os = "android", target_os = "ios"))
             && no_gpu_culling
-            && ANDROID_SPLIT.load(std::sync::atomic::Ordering::Relaxed))
+            && MOBILE_SPLIT.load(std::sync::atomic::Ordering::Relaxed))
 }
 fn adapter_requested_split(info: &wgpu::AdapterInfo, requested: Option<u32>) -> Option<u32> {
     // Metal can fail to sample large mipmapped array textures despite advertising the layer limit.
@@ -1905,7 +1905,8 @@ impl wgpu::rwh::HasDisplayHandle for WindowDisplay {
 /// OpenGL. Each is tried when the one before has no surface, adapter or device. A native
 /// crash in the driver can't be
 /// caught in the game; the launcher switches the setting to DirectX 12 after one at
-/// the renderer's start (#746). macOS has Metal only.
+/// the renderer's start (#746). macOS and iOS have Metal only: their builds compile no
+/// Vulkan backend and no GLES one, so there is nothing else to try.
 fn backend_order(
     api: GraphicsApi,
     os: &str,
@@ -1913,8 +1914,11 @@ fn backend_order(
     wgpu_backend: bool,
 ) -> Vec<wgpu::Backends> {
     use wgpu::Backends;
-    if os == "macos" || wgpu_backend {
+    if wgpu_backend {
         return vec![Backends::default()];
+    }
+    if matches!(os, "macos" | "ios") {
+        return vec![Backends::METAL];
     }
     let windows = os == "windows";
     match api {
@@ -1933,6 +1937,7 @@ fn backends_name(backends: wgpu::Backends) -> &'static str {
         wgpu::Backends::VULKAN => "Vulkan",
         wgpu::Backends::DX12 => "DirectX 12",
         wgpu::Backends::GL => "OpenGL",
+        wgpu::Backends::METAL => "Metal",
         _ => "graphics",
     }
 }
@@ -2374,12 +2379,14 @@ async fn open_backend(
         memory_hints: wgpu::MemoryHints::MemoryUsage,
         ..Default::default()
     };
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     let opened = match info.backend {
         wgpu::Backend::Vulkan => horizon_hdr::open_vulkan_device(&adapter, &desc),
         _ => None,
     };
-    #[cfg(target_os = "macos")]
+    // Metal's HDR metadata is the swapchain's colour space, which wgpu sets itself, so
+    // there is no device to open by hand on Apple's platforms.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     let opened = None;
     let opened = match opened {
         Some(opened) => opened,
@@ -2418,9 +2425,9 @@ async fn open_backend(
 const NO_GPU_DRIVER: &str = "No graphics driver with Vulkan, DirectX 12 or OpenGL found: Horizon needs \
      a GPU driver with one of them. Install the latest driver for your NVIDIA, AMD or Intel GPU and \
      start the game again";
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 const NO_GPU_DRIVER: &str = "No Metal graphics device found";
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))]
 const NO_GPU_DRIVER: &str = "No Vulkan or OpenGL graphics driver found: Horizon needs the Vulkan loader \
      (libvulkan.so.1) and a Vulkan driver for your GPU (Mesa's, or NVIDIA's), or OpenGL through EGL";
 /// Logs a step of the renderer's start, for a native crash in the graphics
@@ -4517,9 +4524,11 @@ impl Renderer {
         let flat_wanted = flat::wanted(&adapter, &device);
         // Metal draws solid terrain in two passes (`split_solid`): meshes put all
         // their opaque quads first, so each pass draws its part in a run or two.
-        // Phone GPUs are tilers too (Adreno, Mali, PowerVR): the same grouping, on Android.
+        // Phone GPUs are tilers too (Adreno, Mali, PowerVR, and Apple's GPUs on iOS):
+        // the same grouping there.
         crate::mesher::group_parts(
-            adapter.get_info().backend == wgpu::Backend::Metal || cfg!(target_os = "android"),
+            adapter.get_info().backend == wgpu::Backend::Metal
+                || cfg!(any(target_os = "android", target_os = "ios")),
         );
         // Readable as storage where flat draws run: a shader pack's terrain program reads them.
         let arena = arena::Arena::new(
@@ -4675,10 +4684,10 @@ impl Renderer {
         let adapter_info = adapter.get_info();
         let cull = cull::Cull::supported(&adapter, &device)
             .filter(|_| occlusion_culling_requested(&adapter_info, cull_env.as_deref().ok()))
-            // Off on Android unless asked for (HORIZON_GPU_CULL=1): on mobile
+            // Off on the phones unless asked for (HORIZON_GPU_CULL=1): on mobile
             // tilers (Adreno) its box test let sections drop out for a frame
             // or a few after a block changed, showing through terrain.
-            .filter(|_| !cfg!(target_os = "android") || cull_env.is_ok())
+            .filter(|_| !cfg!(any(target_os = "android", target_os = "ios")) || cull_env.is_ok())
             .map(|depth_test| match cull_env.as_deref() {
                 Ok("shader") => cull::DepthTest::InShader,
                 _ => depth_test,
@@ -5278,7 +5287,7 @@ impl Renderer {
     /// Fast Opaque Pass on Android: solid terrain in two passes, the opaque one with
     /// no discard, so a tiler keeps its hidden surface removal for most of the world.
     pub fn set_opaque_split(&mut self, on: bool) {
-        ANDROID_SPLIT.store(on, std::sync::atomic::Ordering::Relaxed);
+        MOBILE_SPLIT.store(on, std::sync::atomic::Ordering::Relaxed);
     }
     fn split_solid(&self) -> bool {
         split_solid_on(self.info.backend, self.gpu_culling.is_none())
@@ -12839,13 +12848,15 @@ mod tests {
             order(GraphicsApi::OpenGl, "linux", "x86_64"),
             [Backends::GL]
         );
-        // WGPU_BACKEND picks the backends itself; macOS has Metal only.
+        // WGPU_BACKEND picks the backends itself; macOS and iOS have Metal only.
         for api in GraphicsApi::ALL {
             assert_eq!(
                 backend_order(api, "windows", "aarch64", true),
                 [Backends::default()]
             );
-            assert_eq!(order(api, "macos", "aarch64"), [Backends::default()]);
+            for os in ["macos", "ios"] {
+                assert_eq!(order(api, os, "aarch64"), [Backends::METAL]);
+            }
         }
     }
     #[test]
@@ -12875,12 +12886,16 @@ mod tests {
             search(GraphicsApi::OpenGl, "linux", "x86_64"),
             [(vec![g], false), (vec![v], false), (vec![g], true)]
         );
-        // WGPU_BACKEND and macOS: one set of backends, nothing else to try.
+        // WGPU_BACKEND and the Apple platforms: one set of backends, nothing else to try.
         let all = Backends::default();
-        for (os, env) in [("windows", true), ("macos", false)] {
+        for (os, env, backends) in [
+            ("windows", true, all),
+            ("macos", false, Backends::METAL),
+            ("ios", false, Backends::METAL),
+        ] {
             assert_eq!(
                 device_search(GraphicsApi::Vulkan, os, "x86_64", env),
-                [(vec![all], false), (vec![all], true)]
+                [(vec![backends], false), (vec![backends], true)]
             );
         }
     }

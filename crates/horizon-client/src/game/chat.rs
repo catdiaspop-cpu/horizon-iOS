@@ -1407,6 +1407,15 @@ impl Game<'_> {
                 return (px / batch.scale).min(batch.height * 0.6).floor();
             }
         }
+        // iOS draws the keyboard over the window instead of shrinking it, and winit
+        // reports no height for it: lift the chat by the share of a phone's screen its
+        // keyboard covers, while a text field has focus.
+        #[cfg(target_os = "ios")]
+        {
+            if super::ime::SOFT_KEYBOARD.load(std::sync::atomic::Ordering::Relaxed) {
+                return (batch.height * 0.38).min(batch.height * 0.6).floor();
+            }
+        }
         let _ = batch;
         0.0
     }

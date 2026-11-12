@@ -210,8 +210,8 @@ impl PresentMode {
 }
 
 /// The graphics API the renderer runs on. Windows picks Vulkan, DirectX 12 or
-/// OpenGL; Linux picks Vulkan or OpenGL; macOS always uses its one backend
-/// (Metal). Applies at the next start.
+/// OpenGL; Linux and Android pick Vulkan or OpenGL; macOS and iOS always use
+/// their one backend (Metal). Applies at the next start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum GraphicsApi {
     /// Vulkan, then DirectX 12 (Windows), then OpenGL when neither has a surface, adapter or device.
@@ -230,7 +230,8 @@ impl GraphicsApi {
         GraphicsApi::OpenGl,
     ];
     /// The APIs this system offers, in the order the setting cycles through
-    /// them: DirectX 12 is Windows' third backend, and macOS has no choice.
+    /// them: DirectX 12 is Windows' third backend, and the Apple platforms
+    /// (Metal) have no choice.
     pub fn choices() -> &'static [GraphicsApi] {
         const WINDOWS: [GraphicsApi; 4] = [
             GraphicsApi::Auto,
@@ -240,11 +241,11 @@ impl GraphicsApi {
         ];
         const LINUX: [GraphicsApi; 3] =
             [GraphicsApi::Auto, GraphicsApi::Vulkan, GraphicsApi::OpenGl];
-        const MACOS: [GraphicsApi; 1] = [GraphicsApi::Auto];
+        const APPLE: [GraphicsApi; 1] = [GraphicsApi::Auto];
         if cfg!(windows) {
             &WINDOWS
-        } else if cfg!(target_os = "macos") {
-            &MACOS
+        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+            &APPLE
         } else {
             &LINUX
         }
@@ -829,7 +830,7 @@ impl Default for Graphics {
             hdr_key: "key.keyboard.unknown".into(),
             battery: false,
             shadow_cache: false,
-            opaque_split: cfg!(target_os = "android"),
+            opaque_split: cfg!(any(target_os = "android", target_os = "ios")),
             api: GraphicsApi::Auto,
             translucent_batching: true,
             hdr_smooth_gradients: true,
@@ -1159,7 +1160,7 @@ mod tests {
         let choices = GraphicsApi::choices();
         if cfg!(windows) {
             assert_eq!(choices, GraphicsApi::ALL);
-        } else if cfg!(target_os = "macos") {
+        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
             assert_eq!(choices, [GraphicsApi::Auto]);
         } else {
             assert_eq!(

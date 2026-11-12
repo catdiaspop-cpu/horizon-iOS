@@ -26,6 +26,9 @@ use std::path::{Path, PathBuf};
 pub(super) const DIR: &str = "mods";
 
 /// Whether this game opens prebuilt mods: only where it can't build them.
+// Android loads the `.hnmod` libraries the launcher builds for it. iOS has no such
+// libraries: every native mod in an app bundle must be signed with the app, and the game
+// folder's mods are not, so the platform keeps WebAssembly mods only.
 pub(super) const ON: bool = cfg!(target_os = "android");
 
 /// One prebuilt mod found at start.

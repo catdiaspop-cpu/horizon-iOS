@@ -233,7 +233,7 @@ impl Default for Settings {
             // A phone starts with VSync off at its panel's 120 Hz: frames past
             // that are never shown and only heat it.
             max_fps: 120,
-            vsync: !cfg!(target_os = "android"),
+            vsync: !cfg!(any(target_os = "android", target_os = "ios")),
             fullscreen: false,
             smooth_lighting: true,
             clouds: "true".into(),
@@ -394,9 +394,9 @@ impl Settings {
         let emote = settings.extras.emote_key.clone();
         settings.keys.set("key.emote", &emote);
         // Only the first start's defaults: what the player sets afterwards stays.
-        #[cfg(target_os = "android")]
+        #[cfg(any(target_os = "android", target_os = "ios"))]
         let settings = if first_run { settings.fit_phone() } else { settings };
-        #[cfg(not(target_os = "android"))]
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let _ = first_run;
         settings.describe_for_crashes();
         // Options.load: the backend asked for at startup, what a restart is measured from.
@@ -409,7 +409,7 @@ impl Settings {
     /// Java servers at the desktop default of 12 chunks: the client cannot
     /// answer keep-alives, so the tab list shows thousands of ms, then the
     /// process dies. The mined items are already on the server.
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     fn fit_phone(mut self) -> Self {
         let kb = mem_total_kb();
         if kb == 0 || kb >= 7 * 1024 * 1024 {
@@ -433,6 +433,14 @@ impl Settings {
     }
 }
 
+/// The machine's RAM in KiB: iOS reads `hw.memsize`, which the sandbox reports for the
+/// device rather than for the app's share of it; 0 where it says nothing.
+#[cfg(target_os = "ios")]
+fn mem_total_kb() -> u64 {
+    horizon_threads::process_memory::physical_memory_bytes().map_or(0, |bytes| bytes / 1024)
+}
+
+/// The machine's RAM in KiB from `/proc/meminfo`, 0 where it says nothing.
 #[cfg(target_os = "android")]
 fn mem_total_kb() -> u64 {
     let Ok(text) = fs::read_to_string("/proc/meminfo") else {

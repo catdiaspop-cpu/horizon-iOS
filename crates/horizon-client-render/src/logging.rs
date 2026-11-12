@@ -39,7 +39,8 @@ pub fn data_dir() -> PathBuf {
         if let Some(d) = env("APPDATA") {
             return d;
         }
-    } else if cfg!(target_os = "macos") {
+    } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+        // Apple's platforms keep data in `Library`, which an iOS app's container has too.
         if let Some(h) = &home {
             return h.join("Library/Application Support");
         }

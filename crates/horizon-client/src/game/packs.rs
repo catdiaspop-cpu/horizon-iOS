@@ -42,7 +42,16 @@ pub fn open_folder(dir: &Path) {
         super::android_ime::open_game_folder(dir);
         return;
     }
-    #[cfg(not(target_os = "android"))]
+    // iOS shows the game folder in the Files app already (`UIFileSharingEnabled` and
+    // `LSSupportsOpeningDocumentsInPlace` in the bundle's Info.plist), and no app can open
+    // another's: there is nothing left to do.
+    #[cfg(target_os = "ios")]
+    {
+        let _ = dir;
+        log::info!("Horizon: the game folder is in the Files app, under On My iPhone > Horizon");
+        return;
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
     if let Err(e) = folder::command(dir).and_then(|mut command| command.spawn()) {
         log::warn!("Horizon: could not open {}: {e}", dir.display());
@@ -58,7 +67,11 @@ pub fn open_uri(uri: &str) {
     if let Err(error) = open::that_detached(uri) {
         log::warn!("Horizon: could not open URI {uri}: {error}");
     }
-    #[cfg(not(windows))]
+    // iOS opens a URL through `UIApplication.openURL:`, which needs the UIKit framework the
+    // game does not link: the log names the link instead (IOS.md's limitations).
+    #[cfg(target_os = "ios")]
+    log::info!("Horizon: link (iOS opens no URLs from the game): {uri}");
+    #[cfg(all(not(windows), not(target_os = "ios")))]
     open_folder(Path::new(uri));
 }
 /// The resource root to load from, given the vanilla root, the selection and

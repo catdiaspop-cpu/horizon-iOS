@@ -63,7 +63,38 @@ pub fn resident_bytes() -> Option<u64> {
 }
 
 /// The memory this process holds in RAM, in bytes.
-#[cfg(target_vendor = "apple")]
+///
+/// macOS: `proc_pidinfo`. iOS keeps libproc's task info to the system, so the
+/// app asks the kernel about its own task instead (`task_info`, the call
+/// `mach_task_self()`'s port is for), which a sandboxed app may do.
+#[cfg(target_os = "ios")]
+pub fn resident_bytes() -> Option<u64> {
+    // libSystem's own-task port: the variable behind Mach's `mach_task_self()`.
+    // SAFETY: a plain `mach_port_t` libSystem exports and never frees.
+    unsafe extern "C" {
+        static mach_task_self_: libc::mach_port_t;
+    }
+    let mut info = std::mem::MaybeUninit::<libc::mach_task_basic_info>::uninit();
+    let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
+    // SAFETY: `info` is a live, writable value of exactly the `natural_t` count the call
+    // is told, and the task port is the calling task's own.
+    let read = unsafe {
+        libc::task_info(
+            mach_task_self_,
+            libc::MACH_TASK_BASIC_INFO,
+            info.as_mut_ptr().cast(),
+            &raw mut count,
+        )
+    };
+    if read != libc::KERN_SUCCESS {
+        return None;
+    }
+    // SAFETY: a successful call wrote every field of the value.
+    Some(unsafe { info.assume_init() }.resident_size)
+}
+
+/// The memory this process holds in RAM, in bytes.
+#[cfg(target_os = "macos")]
 pub fn resident_bytes() -> Option<u64> {
     let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
     // SAFETY: all-zero is a valid value of this plain C struct, and the call writes at most `size`
@@ -86,9 +117,49 @@ pub fn resident_bytes() -> Option<u64> {
     windows,
     target_os = "linux",
     target_os = "android",
-    target_vendor = "apple"
+    target_os = "macos",
+    target_os = "ios"
 )))]
 pub fn resident_bytes() -> Option<u64> {
+    None
+}
+
+/// The machine's RAM in bytes, as `hw.memsize` reports it. The settings use it on a phone
+/// to size the world to what the device has before the first frame shows its stutter.
+#[cfg(target_vendor = "apple")]
+pub fn physical_memory_bytes() -> Option<u64> {
+    let mut bytes: u64 = 0;
+    let mut size = std::mem::size_of::<u64>();
+    // SAFETY: a NUL-terminated name; `bytes` and `size` are live locals of the size passed.
+    let read = unsafe {
+        libc::sysctlbyname(
+            c"hw.memsize".as_ptr(),
+            (&raw mut bytes).cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    (read == 0 && bytes > 0).then_some(bytes)
+}
+
+/// The machine's RAM in bytes, as `/proc/meminfo` reports it.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub fn physical_memory_bytes() -> Option<u64> {
+    let text = std::fs::read_to_string("/proc/meminfo").ok()?;
+    let kb: u64 = text
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    Some(kb * 1024)
+}
+
+/// [`physical_memory_bytes`]: not known on this system.
+#[cfg(not(any(target_vendor = "apple", target_os = "linux", target_os = "android")))]
+pub fn physical_memory_bytes() -> Option<u64> {
     None
 }
 

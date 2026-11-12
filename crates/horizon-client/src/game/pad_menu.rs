@@ -2152,8 +2152,9 @@ impl Game<'_> {
     /// Steam's on a Steam Deck (`steam://open/keyboard`, which types into
     /// the window like a real keyboard).
     fn pad_open_keyboard(&mut self) {
-        // Android: the system keyboard (android_ime) is the only one.
-        if cfg!(target_os = "android") {
+        // A phone: the system keyboard is the only one (Android's through the activity,
+        // iOS's through the window's input method).
+        if cfg!(any(target_os = "android", target_os = "ios")) {
             return;
         }
         // Without xdg-open (macOS, Windows), Horizon's keyboard instead.

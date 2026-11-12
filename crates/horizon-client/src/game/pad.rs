@@ -344,11 +344,13 @@ impl Game<'_> {
         if activity && self.pad_focused() {
             self.last_input = Instant::now();
             // Touch is not a controller: no pad cursor, glyphs or pad keyboard for it.
-            if !touch_only && (hardware_active || !cfg!(target_os = "android")) {
+            if !touch_only
+                && (hardware_active || !cfg!(any(target_os = "android", target_os = "ios")))
+            {
                 self.pad.in_use = true;
             }
         }
-        if hardware_active && cfg!(target_os = "android") {
+        if hardware_active && cfg!(any(target_os = "android", target_os = "ios")) {
             self.touch.hardware = true;
         }
         self.pad.state = state;

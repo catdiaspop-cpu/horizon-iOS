@@ -394,7 +394,8 @@ impl ModPost {
     /// is due; with the atlas's bindings when `atlas` (the mod has capability `atlas`). True when the pass can run;
     /// while it cannot, the frame is drawn without it.
     /// Whether the pass `version` can run this frame. Not yet built, it is built on a thread of its own and the frame
-    /// goes on without it, unless `wait` (or on macOS, where a compiler crash has to fall inside the frame).
+    /// goes on without it, unless `wait` (or on Apple's platforms, where a Metal compiler crash has
+    /// to fall inside the frame).
     pub fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -403,7 +404,14 @@ impl ModPost {
         atlas: bool,
         wait: bool,
     ) -> bool {
-        self.prepare_at(device, version, source, atlas, wait || cfg!(target_os = "macos"), Instant::now())
+        self.prepare_at(
+            device,
+            version,
+            source,
+            atlas,
+            wait || cfg!(any(target_os = "macos", target_os = "ios")),
+            Instant::now(),
+        )
     }
 
     fn prepare_at(

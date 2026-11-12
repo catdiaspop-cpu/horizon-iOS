@@ -7,9 +7,15 @@ rust-version = "1.85"
 description = "HDR metadata for the swapchain: the Vulkan calls the crates that forbid unsafe code can't make"
 
 [dependencies]
-wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
+# The wgpu types only: no backend is linked in here, so the crate builds for every
+# target the game does (Metal on macOS and iOS included).
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+# `VK_EXT_hdr_metadata`, the only place a swapchain's luminance can be described before
+# Metal's. Apple targets take Metal, where the surface's colour space says it instead, so
+# neither the Vulkan backend nor ash is compiled there at all.
+wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
 # The version wgpu-hal already uses.
 ash = { version = "0.38", default-features = false }
 

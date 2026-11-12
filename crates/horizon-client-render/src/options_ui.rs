@@ -2976,7 +2976,7 @@ impl OptionsUi {
                         on_off(s.mods.is_on(i)),
                     );
                     if installed.problem.as_deref() == Some(crate::mod_list::NOT_BUILT) {
-                        label = label.append(tr(if cfg!(target_os = "android") {
+                        label = label.append(tr(if cfg!(any(target_os = "android", target_os = "ios")) {
                             "horizon.mods.not_built_phone"
                         } else {
                             "horizon.mods.not_built"
@@ -7514,8 +7514,9 @@ mod tests {
                     Opt::GraphicsBackend => "graphics-api".to_owned(),
                     o => format!("{o:?}"),
                 };
-                // macOS has one graphics API: the graphics screen leaves the row out.
-                if id == "graphics-api" && cfg!(target_os = "macos") {
+                // Apple's platforms have one graphics API (Metal): the graphics screen
+                // leaves the row out.
+                if id == "graphics-api" && cfg!(any(target_os = "macos", target_os = "ios")) {
                     continue;
                 }
                 assert!(

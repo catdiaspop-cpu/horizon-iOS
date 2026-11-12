@@ -42,7 +42,8 @@ Horizon — это Minecraft: Java Edition 26.3, заново написанны
 
 ### Возможности
 
-- Нативная игра на Rust, без Java и эмуляции; рендер через Vulkan (запасной вариант GLES 3).
+- Нативная игра на Rust, без Java и эмуляции; на Android рендер через Vulkan (запасной вариант GLES 3),
+  на iOS — через Metal.
 - Сенсорное управление: джойстик, кнопки, бег, удар с поворотом камеры одним пальцем.
 - Три раскладки: «Стандарт», «Как в Bedrock» и своя; редактор кнопок (положение, размер, прозрачность)
   и выбор, крутят ли кнопки камеру.
@@ -51,6 +52,8 @@ Horizon — это Minecraft: Java Edition 26.3, заново написанны
 - Экранная клавиатура в чате, табличках и полях поиска.
 - Файлы игры скачиваются в самом приложении, с докачкой после обрыва.
 - Папка игры видна в «Файлах»: ресурспаки, шейдеры и миры без провода.
+- iOS-сборка (экспериментальная): Metal, те же сенсорные раскладки, IPA собирается в CI
+  и на Mac — [IOS.md](IOS.md).
 
 ### Важно
 
@@ -159,7 +162,7 @@ Horizon — это Minecraft: Java Edition 26.3, заново написанны
 
 ### Сборка
 
-Инструкции по сборке APK в [ANDROID.md](ANDROID.md).
+Инструкции по сборке APK — в [ANDROID.md](ANDROID.md), по сборке IPA — в [IOS.md](IOS.md).
 
 ### Благодарности
 
@@ -187,7 +190,8 @@ The original README lives in [README.upstream.md](README.upstream.md).
 
 ### Features
 
-- Native Rust game, no Java VM or emulation; Vulkan rendering with a GLES 3 fallback.
+- Native Rust game, no Java VM or emulation; Vulkan rendering with a GLES 3 fallback on Android,
+  Metal on iOS.
 - Touch controls: joystick, buttons, sprint toggle, attack while turning the camera with one finger.
 - Three layouts: Standard, Bedrock-style and your own; a button editor (position, size, opacity)
   and a switch for whether buttons also turn the camera.
@@ -196,6 +200,8 @@ The original README lives in [README.upstream.md](README.upstream.md).
 - On-screen keyboard for chat, signs and search fields.
 - Game files are downloaded inside the app and resume after interruptions.
 - Game folder shows up in the Files app: resource packs, shaders and worlds without a cable.
+- An iOS build (experimental): Metal, the same touch layouts, an IPA built in CI and on a Mac —
+  [IOS.md](IOS.md).
 
 ### Heads up
 
@@ -303,7 +309,7 @@ The port requires **arm64**, **Android 8.0+ (API 26)**, and a GPU with **Vulkan*
 
 ### Building
 
-APK build instructions are in [ANDROID.md](ANDROID.md).
+APK build instructions are in [ANDROID.md](ANDROID.md); IPA (iOS) instructions are in [IOS.md](IOS.md).
 
 ### Credits
 

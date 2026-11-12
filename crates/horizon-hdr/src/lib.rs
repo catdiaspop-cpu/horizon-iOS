@@ -2,14 +2,26 @@
 //! forbids unsafe code, can't make itself. wgpu sets no HDR metadata, and
 //! without it a compositor may clip or tone-map everything above 1.0 (80 nits)
 //! of an scRGB swapchain.
+//!
+//! Apple platforms take Metal, where there is no such call: the surface's
+//! colour space and extended dynamic range describe the content, and wgpu's
+//! Metal backend sets both on the `CAMetalLayer` from the swapchain's format
+//! and the surface's `view_formats` (the macOS/iOS HDR path). Nothing in this
+//! crate runs there, and neither the Vulkan backend nor ash is compiled in,
+//! so an iOS or macOS build links no Vulkan at all.
 
 #[cfg(target_os = "linux")]
 pub mod wayland;
 
+/// Whether HDR metadata is something this build tells the compositor itself.
+/// Metal's comes from the swapchain's colour space, which wgpu sets.
+pub const VULKAN_METADATA: bool = cfg!(not(any(target_os = "macos", target_os = "ios")));
+
 /// Opens a Vulkan device with `VK_EXT_hdr_metadata` too, when the GPU offers
 /// it, so [`set_metadata`] can tell the compositor the real peak brightness.
-/// `None` leaves opening to wgpu.
-#[cfg(not(target_os = "macos"))]
+/// `None` leaves opening to wgpu. Not built on Apple platforms: there is no
+/// Vulkan there, and Metal's HDR needs no device extension.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 pub fn open_vulkan_device(
     adapter: &wgpu::Adapter,
     desc: &wgpu::DeviceDescriptor<'_>,
@@ -50,6 +62,8 @@ pub fn open_vulkan_device(
 /// Tells the compositor, through `VK_EXT_hdr_metadata`, that the swapchain's
 /// content is BT.709, peaks at `peak` nits and is no darker than `black`. Needs a
 /// device from `open_vulkan_device` and a configured surface; does nothing otherwise.
+/// On Apple platforms the swapchain's colour space already says it: wgpu sets the
+/// `CAMetalLayer`'s for the HDR format, so this does nothing there.
 pub fn set_metadata(
     device: &wgpu::Device,
     surface: &wgpu::Surface<'_>,
@@ -57,7 +71,7 @@ pub fn set_metadata(
     peak: f32,
     black: f32,
 ) {
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     {
         use wgpu::hal::api::Vulkan;
         // Safety: read-only access to handles wgpu keeps alive while these guards live.
@@ -94,6 +108,6 @@ pub fn set_metadata(
         // Safety: a live swapchain of this device, one metadata entry for it.
         unsafe { loader.set_hdr_metadata(&[swapchain], &[metadata]) };
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     let _ = (device, surface, paper_white, peak, black);
 }
