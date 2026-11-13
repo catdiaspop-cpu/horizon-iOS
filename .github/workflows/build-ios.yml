@@ -9,6 +9,15 @@ name: Build Horizon iOS (.ipa)
 # request's Checks tab and press "Re-run jobs".
 on:
   workflow_dispatch:
+    inputs:
+      # Signing walks every file inside the bundle, and Mojang's prepared files are tens of
+      # thousands of them: a full IPA takes Sideloadly and friends many minutes. Without them
+      # the app downloads the files itself on its first run (game/setup.rs), and the IPA is
+      # small enough to sign in seconds.
+      full:
+        description: "Bundle Minecraft's files in the app (huge IPA, much slower to sign)"
+        type: boolean
+        default: false
   push:
     branches: ["android-port", "main", "master"]
 
@@ -72,9 +81,11 @@ jobs:
           rm -rf target/debug
 
       - name: Fetch Minecraft 26.3 files
+        if: ${{ inputs.full }}
         run: python3 packaging/ios/fetch_assets.py .minecraft
 
       - name: Prepare the game's resources
+        if: ${{ inputs.full }}
         run: >-
           cargo run --release -p horizon-prepare --
           --prepare --minecraft-dir .minecraft --server-jar server.jar
@@ -97,7 +108,7 @@ jobs:
       - name: Upload Horizon.ipa
         uses: actions/upload-artifact@v4
         with:
-          name: Horizon-iOS
+          name: Horizon-iOS-${{ inputs.full && 'full' || 'slim' }}
           path: target/ios/Horizon.ipa
           if-no-files-found: error
 
