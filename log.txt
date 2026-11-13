@@ -1,0 +1,263 @@
+error[E0433]: cannot find module or crate `horizon_prepare` in this scope
+   --> crates/horizon-client/src/android_setup.rs:282:5
+    |
+282 |     horizon_prepare::device::from_client_jar(
+    |     ^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `horizon_prepare`
+    |
+help: there is a crate or module with a similar name
+    |
+282 -     horizon_prepare::device::from_client_jar(
+282 +     horizon_core::device::from_client_jar(
+    |
+error[E0603]: enum `Face` is private
+  --> crates/horizon-client/src/game/setup.rs:10:38
+   |
+10 | use horizon_client::ui_theme::{self, Face, Ui, color};
+   |                                      ^^^^ private enum
+   |
+note: the enum `Face` is defined here
+  --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:82:1
+   |
+82 | pub(crate) enum Face {
+   | ^^^^^^^^^^^^^^^^^^^^
+error[E0603]: module `color` is private
+  --> crates/horizon-client/src/game/setup.rs:10:48
+   |
+10 | use horizon_client::ui_theme::{self, Face, Ui, color};
+   |                                                ^^^^^ private module
+   |
+note: the module `color` is defined here
+  --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:44:1
+   |
+44 | pub(crate) mod color {
+   | ^^^^^^^^^^^^^^^^^^^^
+error[E0603]: constant `SMALL` is private
+   --> crates/horizon-client/src/game/setup.rs:329:43
+    |
+329 |         wrap(ui, Face::Regular, ui_theme::SMALL, error_text, width).len() as f32 * SMALL_LINE
+    |                                           ^^^^^ private constant
+    |
+note: the constant `SMALL` is defined here
+   --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:72:1
+    |
+ 72 | pub(crate) const SMALL: f32 = horizon_theme::CAPTION.px;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[E0603]: constant `SMALL` is private
+   --> crates/horizon-client/src/game/setup.rs:400:19
+    |
+400 |         ui_theme::SMALL,
+    |                   ^^^^^ private constant
+    |
+note: the constant `SMALL` is defined here
+   --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:72:1
+    |
+ 72 | pub(crate) const SMALL: f32 = horizon_theme::CAPTION.px;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[E0603]: constant `SMALL` is private
+   --> crates/horizon-client/src/game/setup.rs:438:60
+    |
+438 |         for (i, line) in wrap(ui, Face::Regular, ui_theme::SMALL, error, layout.bar.w)
+    |                                                            ^^^^^ private constant
+    |
+note: the constant `SMALL` is defined here
+   --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:72:1
+    |
+ 72 | pub(crate) const SMALL: f32 = horizon_theme::CAPTION.px;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[E0603]: constant `SMALL` is private
+   --> crates/horizon-client/src/game/setup.rs:444:27
+    |
+444 |                 ui_theme::SMALL,
+    |                           ^^^^^ private constant
+    |
+note: the constant `SMALL` is defined here
+   --> crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:72:1
+    |
+ 72 | pub(crate) const SMALL: f32 = horizon_theme::CAPTION.px;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+warning: unused import: `osk`
+  --> crates/horizon-client/src/game/touch.rs:33:5
+   |
+33 |     osk,
+   |     ^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+warning: unused imports: `application::ApplicationHandler` and `event_loop::ActiveEventLoop`
+  --> crates/horizon-client/src/game/touch.rs:38:5
+   |
+38 |     application::ApplicationHandler,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+42 |     event_loop::ActiveEventLoop,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[E0624]: method `rounded` is private
+   --> crates/horizon-client/src/game/setup.rs:350:8
+    |
+350 |     ui.rounded(0.0, 0.0, ui.w, ui.h, 0.0, color::BG);
+    |        ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:380:5
+    |
+380 |     pub(crate) fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    |     ----------------------------------------------------------------------------------------- private method defined here
+error[E0624]: method `text_line` is private
+   --> crates/horizon-client/src/game/setup.rs:351:8
+    |
+351 |       ui.text_line(
+    |          ^^^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:450:5
+    |
+450 | /     pub(crate) fn text_line(
+451 | |         &mut self,
+452 | |         face: Face,
+453 | |         size: f32,
+...   |
+458 | |         text: &str,
+459 | |     ) -> f32 {
+    | |____________- private method defined here
+error[E0624]: method `text_line` is private
+   --> crates/horizon-client/src/game/setup.rs:363:16
+    |
+363 |               ui.text_line(
+    |                  ^^^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:450:5
+    |
+450 | /     pub(crate) fn text_line(
+451 | |         &mut self,
+452 | |         face: Face,
+453 | |         size: f32,
+...   |
+458 | |         text: &str,
+459 | |     ) -> f32 {
+    | |____________- private method defined here
+error[E0624]: method `rounded` is private
+   --> crates/horizon-client/src/game/setup.rs:392:8
+    |
+392 |     ui.rounded(bar.x, bar.y, bar.w, bar.h, bar.h / 2.0, color::RAISED);
+    |        ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:380:5
+    |
+380 |     pub(crate) fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    |     ----------------------------------------------------------------------------------------- private method defined here
+error[E0624]: method `rounded` is private
+   --> crates/horizon-client/src/game/setup.rs:395:12
+    |
+395 |         ui.rounded(bar.x, bar.y, filled, bar.h, bar.h / 2.0, color::ACCENT);
+    |            ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:380:5
+    |
+380 |     pub(crate) fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    |     ----------------------------------------------------------------------------------------- private method defined here
+error[E0624]: method `text_line` is private
+   --> crates/horizon-client/src/game/setup.rs:398:8
+    |
+398 |       ui.text_line(
+    |          ^^^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:450:5
+    |
+450 | /     pub(crate) fn text_line(
+451 | |         &mut self,
+452 | |         face: Face,
+453 | |         size: f32,
+...   |
+458 | |         text: &str,
+459 | |     ) -> f32 {
+    | |____________- private method defined here
+error[E0624]: method `rounded` is private
+   --> crates/horizon-client/src/game/setup.rs:424:8
+    |
+424 |     ui.rounded(button.x, button.y, button.w, button.h, button.h / 2.0, plate);
+    |        ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:380:5
+    |
+380 |     pub(crate) fn rounded(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: u32) {
+    |     ----------------------------------------------------------------------------------------- private method defined here
+error[E0624]: method `measure` is private
+   --> crates/horizon-client/src/game/setup.rs:425:22
+    |
+425 |     let label_w = ui.measure(Face::Medium, BUTTON_TEXT, label);
+    |                      ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:429:5
+    |
+429 |     pub(crate) fn measure(&self, face: Face, size: f32, text: &str) -> f32 {
+    |     ---------------------------------------------------------------------- private method defined here
+error[E0624]: method `text_line` is private
+   --> crates/horizon-client/src/game/setup.rs:426:8
+    |
+426 |       ui.text_line(
+    |          ^^^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:450:5
+    |
+450 | /     pub(crate) fn text_line(
+451 | |         &mut self,
+452 | |         face: Face,
+453 | |         size: f32,
+...   |
+458 | |         text: &str,
+459 | |     ) -> f32 {
+    | |____________- private method defined here
+error[E0624]: method `text_line` is private
+   --> crates/horizon-client/src/game/setup.rs:442:16
+    |
+442 |               ui.text_line(
+    |                  ^^^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:450:5
+    |
+450 | /     pub(crate) fn text_line(
+451 | |         &mut self,
+452 | |         face: Face,
+453 | |         size: f32,
+...   |
+458 | |         text: &str,
+459 | |     ) -> f32 {
+    | |____________- private method defined here
+error[E0624]: method `measure` is private
+   --> crates/horizon-client/src/game/setup.rs:504:15
+    |
+504 |         if ui.measure(face, size, &candidate) <= width || line.is_empty() {
+    |               ^^^^^^^ private method
+    |
+   ::: crates/horizon-client-lib/../horizon-client/src/ui_theme.rs:429:5
+    |
+429 |     pub(crate) fn measure(&self, face: Face, size: f32, text: &str) -> f32 {
+    |     ---------------------------------------------------------------------- private method defined here
+error[E0277]: `std::result::Result<std::borrow::Cow<'_, str>, ZipError>` doesn't implement `std::fmt::Display`
+   --> crates/horizon-client/src/android_setup.rs:408:61
+    |
+408 |             return Err(format!("derived pack: bad path {}", entry.name()));
+    |                                                        --   ^^^^^^^^^^^^ `std::result::Result<std::borrow::Cow<'_, str>, ZipError>` cannot be formatted with the default formatter
+    |                                                        |
+    |                                                        required by this formatting parameter
+    |
+    = help: the trait `std::fmt::Display` is not implemented for `std::result::Result<std::borrow::Cow<'_, str>, ZipError>`
+    = note: in format strings you may be able to use `{:?}` (or `{:#?}` for pretty-print) instead
+warning: variable does not need to be mutable
+   --> crates/horizon-client/src/game/setup.rs:144:13
+    |
+144 |         let mut ui = Ui::new(&self.gui.atlas, &mut batch, cursor);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+warning: unused variable: `event_loop`
+   --> crates/horizon-client/src/game/setup.rs:132:25
+    |
+132 |     fn click(&mut self, event_loop: &ActiveEventLoop) {
+    |                         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_loop`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+Some errors have detailed explanations: E0277, E0433, E0603, E0624.
+For more information about an error, try `rustc --explain E0277`.
+warning: `horizon-client` (lib) generated 4 warnings
+error: could not compile `horizon-client` (lib) due to 19 previous errors; 4 warnings emitted
+Error: Process completed with exit code 101.
