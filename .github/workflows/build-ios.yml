@@ -18,7 +18,11 @@ concurrency:
 
 jobs:
   build-ios:
-    runs-on: macos-15
+    # `macos-15-intel`, not `macos-15`: GitHub's arm64 macOS fleet is quota-governed and these
+    # jobs sat waiting for a runner ("The job was not acquired by Runner ... capacity
+    # constraints"). The Intel image cross-compiles the same arm64 device binary and has 14 GB
+    # of RAM instead of 7, which the asset prepare and the build both use.
+    runs-on: macos-15-intel
 
     steps:
       - name: Checkout repository
@@ -76,18 +80,6 @@ jobs:
           name: Horizon-iOS
           path: target/ios/Horizon.ipa
           if-no-files-found: error
-
-      # A failed build's log, for whoever has to read the errors: the Actions log download
-      # lives on a host some clients can't reach, an artifact travels with the run.
-      - name: Upload the logs when something failed
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Horizon-iOS-logs
-          path: |
-            check.log
-            build.log
-          if-no-files-found: ignore
 
       - name: Annotate the first errors
         if: failure()
