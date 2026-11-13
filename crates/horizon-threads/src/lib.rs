@@ -394,9 +394,19 @@ pub fn catch_stop_signals() {}
 /// World generation, meshing and the tick allocate and free small blocks on
 /// every worker at once; the system heaps serialise them (Windows' heap was
 /// 16% of a chunk's generation time), mimalloc keeps a heap per thread.
+#[cfg(not(target_os = "ios"))]
 pub type Allocator = mimalloc::MiMalloc;
 /// The game's mimalloc allocator.
+#[cfg(not(target_os = "ios"))]
 pub const ALLOCATOR: Allocator = mimalloc::MiMalloc;
+/// iOS links no mimalloc (see `Cargo.toml`): its C sources call `___chkstk_darwin`, which the
+/// platform's stubs do not define at the version they are built for. The system heap is the one
+/// Apple keeps tuned for the phone, and `main.rs`'s `#[global_allocator]` takes it as it is.
+#[cfg(target_os = "ios")]
+pub type Allocator = std::alloc::System;
+/// The system allocator iOS builds use.
+#[cfg(target_os = "ios")]
+pub const ALLOCATOR: Allocator = std::alloc::System;
 
 /// The global allocator of a build with the `alloc-census` feature: live
 /// heap bytes by startup step and thread, for `horizon-ctl memory`.
@@ -412,12 +422,14 @@ pub fn heap_tag(name: &'static str) -> Option<heap_census::Tag> {
 
 /// `mi_option_purge_delay` in mimalloc.h (index 15 in v2 and v3); the bindings
 /// don't name it.
+#[cfg(not(target_os = "ios"))]
 const PURGE_DELAY: libmimalloc_sys::mi_option_t = 15;
 
 /// Set the allocator up, first thing in `main`: free pages go back to the OS
 /// at once instead of a second later. With mimalloc's delay the game held a
 /// quarter more memory than with the system heap; without it a few percent,
 /// and generation keeps most of its speed-up.
+#[cfg(not(target_os = "ios"))]
 pub fn configure_allocator() {
     // SAFETY: sets one integer option, which mimalloc reads at each purge.
     unsafe {
@@ -425,8 +437,22 @@ pub fn configure_allocator() {
     }
 }
 
+/// The system heap has no options to set: the app's pages go back when iOS says so.
+#[cfg(target_os = "ios")]
+pub fn configure_allocator() {}
+
 /// The bytes the allocator has committed now and at its peak (mimalloc's
 /// process info), for `horizon-ctl memory`.
+#[cfg(target_os = "ios")]
+pub fn allocator_commit() -> (usize, usize) {
+    // The system heap does not publish its committed bytes; the game's own RSS does, through
+    // `resident_bytes`.
+    (0, 0)
+}
+
+/// The bytes the allocator has committed now and at its peak (mimalloc's
+/// process info), for `horizon-ctl memory`.
+#[cfg(not(target_os = "ios"))]
 pub fn allocator_commit() -> (usize, usize) {
     let mut info = [0usize; 8];
     let [
@@ -459,11 +485,18 @@ pub fn allocator_commit() -> (usize, usize) {
 /// large was dropped: mimalloc's free pages, then the system heap's, which
 /// native libraries still use: glibc keeps freed pages in the arena of the
 /// thread that allocated them, and macOS in its zones until memory runs short.
+#[cfg(not(target_os = "ios"))]
 pub fn release_free_memory() {
     // SAFETY: frees only pages no allocation uses (this thread's heap, shared arenas).
     unsafe {
         libmimalloc_sys::mi_collect(true);
     }
+    release();
+}
+
+/// iOS: the system heap's zones, which `release` asks to trim.
+#[cfg(target_os = "ios")]
+pub fn release_free_memory() {
     release();
 }
 
@@ -745,6 +778,7 @@ mod tests {
 
     /// The option set is the purge delay: mimalloc v3's default for it is
     /// 1000 ms, and it is 0 once configured.
+    #[cfg(not(target_os = "ios"))]
     #[test]
     fn configuring_the_allocator_purges_at_once() {
         // SAFETY: reads and sets one integer option.

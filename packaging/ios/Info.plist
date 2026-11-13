@@ -23,7 +23,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>MinimumOSVersion</key>
-    <string>13.0</string>
+    <string>15.0</string>
     <!-- wgpu takes Metal here, so a device without it has no renderer at all. -->
     <key>UIRequiredDeviceCapabilities</key>
     <array>

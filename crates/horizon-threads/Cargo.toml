@@ -7,6 +7,11 @@ rust-version = "1.85"
 description = "Scheduling hints for the game's threads and its allocator, and the other OS calls the crates that forbid unsafe code can't make"
 
 [dependencies]
+# The phone and desktop builds' allocator. iOS links no mimalloc: its C sources are built for a
+# newer iOS than the binary targets (the SDK's newest, not ours) and call `___chkstk_darwin`, a
+# stack-probe helper the platform's stubs at that version do not define, so the link failed with
+# an undefined symbol. The system heap is the one Apple keeps tuned for the phone.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
 mimalloc = { version = "0.1.52", default-features = false }
 libmimalloc-sys = { version = "0.1.49", default-features = false, features = ["extended"] }
 

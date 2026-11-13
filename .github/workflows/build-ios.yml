@@ -23,6 +23,10 @@ jobs:
     # constraints"). The Intel image cross-compiles the same arm64 device binary and has 14 GB
     # of RAM instead of 7, which the asset prepare and the build both use.
     runs-on: macos-15-intel
+    env:
+      # The version `packaging/ios/build_ipa.sh` links for: the check and the build must compile
+      # the dependencies' C code (ring, and mimalloc before iOS dropped it) for the same one.
+      IPHONEOS_DEPLOYMENT_TARGET: "15.0"
 
     steps:
       - name: Checkout repository

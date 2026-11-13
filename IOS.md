@@ -38,7 +38,8 @@ ios-deploy --bundle target/ios/Payload/Horizon.app
 ```
 
 Or copy `Horizon.ipa` to the device (AltStore, Sideloadly) or open it in the simulator's
-`simctl`. Needs iOS 13 or newer, arm64 and Metal.
+`simctl`. Needs iOS 15 or newer, arm64 and Metal: the app is built and linked for that version
+(`IPHONEOS_DEPLOYMENT_TARGET`), so the C code of its dependencies is too.
 
 ## Game files
 
@@ -80,7 +81,7 @@ iTunes, the Files app or iCloud Drive.
 | `horizon-client/src/game.rs` | the mobile lifecycle (`resumed`/`suspended`, the background flag). `Game::sync_ime` shows the keyboard through winit's `set_ime_allowed`, which is `becomeFirstResponder` on iOS |
 | `horizon-client/src/game/touch.rs` | touch controls, on-screen buttons and the close button are the phone platforms' (Android and iOS) |
 | `horizon-client-input` | no `arboard` clipboard (the game keeps its own), no "key without modifiers" (the soft keyboard has none) |
-| `horizon-threads` | process memory through `task_info` (libproc's `proc_pidinfo` is macOS only), RAM through `hw:memsize` |
+| `horizon-threads` | process memory through `task_info` (libproc's `proc_pidinfo` is macOS only), RAM through `hw:memsize`; the system allocator instead of mimalloc (`___chkstk_darwin` is not in iOS's stubs) |
 
 ## Limitations
 

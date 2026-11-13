@@ -12,6 +12,10 @@ FEATURES="${FEATURES:-audio}"
 # The release this IPA is, as the APK build reads the manifest: the game names it in its log
 # and reports (horizon-core release.rs) instead of the crate's version.
 export HORIZON_VERSION="${HORIZON_VERSION:-$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' packaging/android/AndroidManifest.xml)}"
+# The iOS the app is for (`packaging/ios/Info.plist`): the dependencies' C code (ring's assembly)
+# is built for the version the binary is linked against instead of the SDK's newest, which the
+# linker warned about as "built for newer 'iOS' version".
+export IPHONEOS_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-15.0}"
 OUT=target/ios
 APP="$OUT/Payload/Horizon.app"
 
