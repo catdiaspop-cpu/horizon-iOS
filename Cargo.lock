@@ -1548,6 +1548,7 @@ dependencies = [
  "horizon-narrator",
  "horizon-native-abi",
  "horizon-optifine",
+ "horizon-prepare",
  "horizon-protocol",
  "horizon-server-files",
  "horizon-shader-api",

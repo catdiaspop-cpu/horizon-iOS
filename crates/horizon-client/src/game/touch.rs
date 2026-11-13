@@ -30,17 +30,18 @@ use super::Game;
 use horizon_client::{
     gamepad::Button,
     hud::{HudAtlas, HudBatch, rgba},
-    osk,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Instant};
 use winit::{
-    application::ApplicationHandler,
     dpi::PhysicalPosition,
     keyboard::KeyCode,
     event::{DeviceId, ElementState, MouseButton, Touch, TouchPhase, WindowEvent},
-    event_loop::ActiveEventLoop,
 };
+// The on-screen keyboard is Android's activity (`android_ime`); iOS's is the window's own input
+// method, which needs no key events of its own.
+#[cfg(target_os = "android")]
+use horizon_client::osk;
 
 /// Held this long without moving, a look finger breaks blocks.
 const HOLD_MS: u128 = 280;

@@ -103,6 +103,8 @@ pub mod native_data;
 pub mod net;
 pub mod nether_portal;
 pub mod no_resources;
+/// The first-run download screen of the phone builds (`game/setup.rs` drives it).
+pub mod setup_screen;
 pub mod offline_name;
 pub mod old_world;
 pub mod osk;

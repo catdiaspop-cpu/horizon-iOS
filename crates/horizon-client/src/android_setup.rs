@@ -405,7 +405,7 @@ fn run(home: &Path, derived: &str) -> Result<(), String> {
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
         let Some(relative) = entry.enclosed_name() else {
-            return Err(format!("derived pack: bad path {}", entry.name()));
+            return Err("derived pack: a path outside the archive".into());
         };
         let target = resources.join(relative);
         if entry.is_dir() {
