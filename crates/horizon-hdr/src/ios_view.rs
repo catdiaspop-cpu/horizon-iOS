@@ -10,7 +10,8 @@ use std::ffi::c_void;
 
 use objc2::msg_send;
 use objc2::runtime::{AnyClass, AnyObject};
-use objc2_foundation::CGRect;
+// `NSRect` is UIKit's `CGRect` under the name objc2-foundation 0.3 exports at its root.
+use objc2_foundation::NSRect;
 
 /// A line for the log: the screen, the window, the view and its layer.
 pub fn describe(view: *mut c_void) -> String {
@@ -21,15 +22,15 @@ pub fn describe(view: *mut c_void) -> String {
         let view = &*(view as *const AnyObject);
         let window: *mut AnyObject = msg_send![view, window];
         let layer: *mut AnyObject = msg_send![view, layer];
-        let view_bounds: CGRect = msg_send![view, bounds];
-        let view_frame: CGRect = msg_send![view, frame];
+        let view_bounds: NSRect = msg_send![view, bounds];
+        let view_frame: NSRect = msg_send![view, frame];
         let view_scale: f64 = msg_send![view, contentScaleFactor];
-        let window_bounds: Option<CGRect> = if window.is_null() {
+        let window_bounds: Option<NSRect> = if window.is_null() {
             None
         } else {
             Some(msg_send![window, bounds])
         };
-        let layer_frame: Option<CGRect> = if layer.is_null() {
+        let layer_frame: Option<NSRect> = if layer.is_null() {
             None
         } else {
             Some(msg_send![layer, frame])
@@ -43,7 +44,7 @@ pub fn describe(view: *mut c_void) -> String {
             Some(class) => msg_send![class, mainScreen],
             None => std::ptr::null_mut(),
         };
-        let screen_bounds: Option<CGRect> = if screen.is_null() {
+        let screen_bounds: Option<NSRect> = if screen.is_null() {
             None
         } else {
             Some(msg_send![screen, bounds])
@@ -69,7 +70,7 @@ pub fn describe(view: *mut c_void) -> String {
 }
 
 /// A rect in points, as UIKit prints it.
-fn points(rect: Option<CGRect>) -> String {
+fn points(rect: Option<NSRect>) -> String {
     match rect {
         Some(rect) => format!(
             "{:.0}x{:.0} at ({:.0}, {:.0}) pt",
