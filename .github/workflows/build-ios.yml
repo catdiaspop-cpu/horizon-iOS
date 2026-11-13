@@ -61,6 +61,12 @@ jobs:
             -p horizon-client --bin horizon-client \
             --no-default-features --features audio 2>&1 | tee check.log
 
+      - name: Free the room the build needs
+        run: |
+          df -h /
+          # The check's dev artifacts are never used again: the release build wants the disk.
+          rm -rf target/debug
+
       - name: Fetch Minecraft 26.3 files
         run: python3 packaging/ios/fetch_assets.py .minecraft
 
@@ -70,9 +76,19 @@ jobs:
           --prepare --minecraft-dir .minecraft --server-jar server.jar
 
       - name: Build the app and package the IPA
+        env:
+          # `fast` is release code without thin LTO and with 16 codegen units: the shipped IPA
+          # wants `release`, but a CI loop on 3-4 cores cannot spend 40 minutes in one link, and
+          # the runner's 14 GB cannot hold its temporaries.
+          PROFILE: fast
+          # The bundle takes the prepared folder instead of a copy of it.
+          HORIZON_IOS_MOVE_RESOURCES: "1"
         run: |
           set -o pipefail
+          rm -rf .minecraft
+          df -h /
           ./packaging/ios/build_ipa.sh 2>&1 | tee build.log
+          df -h /
 
       - name: Upload Horizon.ipa
         uses: actions/upload-artifact@v4
@@ -85,14 +101,19 @@ jobs:
         if: failure()
         run: |
           python3 - <<'PY'
-          import glob, re
+          import os, re
           lines = []
           for name in ("build.log", "check.log"):
               try:
                   lines += open(name, encoding="utf-8", errors="replace").read().splitlines()
               except OSError:
                   pass
-          errors = [l for l in lines if re.match(r"^\s*(error(\[E\d+\])?:|--> )", l)]
+          summary = []
+          errors = [l for l in lines if re.match(r"^\s*(error(\[E\d+\])?:|--> |warning: unused)", l)]
+          summary += errors[-40:]
+          summary += ["", "last 40 lines:"] + lines[-40:]
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a", encoding="utf-8") as out:
+              out.write("```\n" + "\n".join(summary) + "\n```\n")
           for line in errors[:40]:
               print("::error::" + line.replace("%", "%25").replace("\r", ""))
           print(f"{len(errors)} error line(s) in {len(lines)} log line(s)")

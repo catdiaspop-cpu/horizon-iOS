@@ -25,7 +25,13 @@ cp "target/$TARGET/$PROFILE/horizon-client" "$APP/Horizon"
 chmod +x "$APP/Horizon"
 # The game looks for `resources` beside its executable (game/options.rs), which is the bundle.
 if [ -d ".local/horizon-client/26.3" ]; then
-  cp -R .local/horizon-client/26.3 "$APP/resources"
+  # CI moves it: the runner's disk is 14 GB and the prepared folder is a gigabyte more. On a
+  # developer's machine the copy stays, so `horizon-prepare`'s output can be reused.
+  if [ "${HORIZON_IOS_MOVE_RESOURCES:-0}" = "1" ]; then
+    mv .local/horizon-client/26.3 "$APP/resources"
+  else
+    cp -R .local/horizon-client/26.3 "$APP/resources"
+  fi
 else
   echo "warning: .local/horizon-client/26.3 is missing: run packaging/ios/fetch_assets.py first," \
        "or the app starts without Minecraft's files" >&2
