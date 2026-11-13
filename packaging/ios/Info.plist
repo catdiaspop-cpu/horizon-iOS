@@ -51,6 +51,24 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
+    <!-- Downloads: Mojang's files and server lists are HTTPS, but players' own URLs, custom
+         server lists and resource-pack links are whatever the server says, HTTP included. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+    <!-- LAN worlds and servers on the same network (iOS 14 asks the player for this; without the
+         string the prompt never appears and the multicast finds nothing). -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Horizon finds Minecraft servers on your local network and lets them find your world.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_minecraft._tcp</string>
+    </array>
+
     <!-- The game folder (Documents) shows in the Files app: saves, resource packs, mods. -->
     <key>UIFileSharingEnabled</key>
     <true/>

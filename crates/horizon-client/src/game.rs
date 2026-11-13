@@ -18487,9 +18487,9 @@ impl ApplicationHandler for Game<'_> {
         );
         // `--offscreen` renders into a texture: its window would only show white.
         let window_step = startup::step("window.create");
+        let attributes = horizon_client::window::request_inner_size(attributes, size);
         let window = match event_loop.create_window(
             attributes
-                .with_inner_size(winit::dpi::LogicalSize::new(size[0], size[1]))
                 .with_fullscreen(fullscreen.then_some(winit::window::Fullscreen::Borderless(None)))
                 .with_visible(!self.options.offscreen),
         ) {
@@ -18502,6 +18502,13 @@ impl ApplicationHandler for Game<'_> {
         };
         horizon_client::window::settle_created_fullscreen(&window, fullscreen);
         drop(window_step);
+        let inner = window.inner_size();
+        log::info!(
+            "Horizon window: {}x{} physical pixels at scale {}",
+            inner.width,
+            inner.height,
+            window.scale_factor()
+        );
         horizon_client::telemetry::note_display(&window);
         match self.new_renderer(window.clone()) {
             Ok(r) => {
@@ -22832,9 +22839,9 @@ impl Loading {
         );
         // `--offscreen` renders into a texture: its window would only show white.
         let window_step = startup::step("window.create");
+        let attributes = horizon_client::window::request_inner_size(attributes, size);
         let window = match event_loop.create_window(
             attributes
-                .with_inner_size(winit::dpi::LogicalSize::new(size[0], size[1]))
                 .with_fullscreen(fullscreen.then_some(winit::window::Fullscreen::Borderless(None)))
                 .with_visible(!self.options.as_ref().is_some_and(|o| o.offscreen)),
         ) {
@@ -22847,6 +22854,13 @@ impl Loading {
         };
         horizon_client::window::settle_created_fullscreen(&window, fullscreen);
         drop(window_step);
+        let inner = window.inner_size();
+        log::info!(
+            "Horizon window: {}x{} physical pixels at scale {}",
+            inner.width,
+            inner.height,
+            window.scale_factor()
+        );
         horizon_client::telemetry::note_display(&window);
         // The renderer takes seconds to build and winit's window sits white
         // until the first frame presents, so paint the boot screen on it and

@@ -609,6 +609,25 @@ pub fn settle_created_fullscreen(window: &winit::window::Window, fullscreen: boo
     }
 }
 
+/// Asks for the window's size, except on iOS. There the window is the screen (the bundle is
+/// landscape-only and `UIRequiresFullScreen`): a requested desktop-sized window becomes a view
+/// of that size inside the screen, and the game draws into it - the picture sat in one corner
+/// with the rest of the screen black.
+pub fn request_inner_size(
+    attributes: winit::window::WindowAttributes,
+    size: [f64; 2],
+) -> winit::window::WindowAttributes {
+    #[cfg(target_os = "ios")]
+    {
+        let _ = size;
+        attributes
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        attributes.with_inner_size(winit::dpi::LogicalSize::new(size[0], size[1]))
+    }
+}
+
 /// `Window.applyFullscreen`: the fullscreen the window asks for. Exclusive fullscreen takes
 /// `Monitor.getPreferredVideoMode` (the preferred mode if the monitor has it, else the desktop
 /// mode); a monitor with no usable mode falls back to borderless, as vanilla does.
