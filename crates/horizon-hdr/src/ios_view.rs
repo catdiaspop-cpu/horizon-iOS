@@ -8,8 +8,8 @@
 
 use std::ffi::c_void;
 
-use objc2::runtime::{AnyClass, AnyObject};
 use objc2::msg_send;
+use objc2::runtime::{AnyClass, AnyObject};
 use objc2_foundation::CGRect;
 
 /// A line for the log: the screen, the window, the view and its layer.
@@ -24,41 +24,65 @@ pub fn describe(view: *mut c_void) -> String {
         let view_bounds: CGRect = msg_send![view, bounds];
         let view_frame: CGRect = msg_send![view, frame];
         let view_scale: f64 = msg_send![view, contentScaleFactor];
-        let (window_bounds, layer_frame, layer_scale) = if window.is_null() || layer.is_null() {
-            (CGRect::ZERO, CGRect::ZERO, 0.0)
+        let window_bounds: Option<CGRect> = if window.is_null() {
+            None
         } else {
-            (
-                msg_send![window, bounds],
-                msg_send![layer, frame],
-                msg_send![layer, contentsScale],
-            )
+            Some(msg_send![window, bounds])
         };
-        let screen = AnyClass::get(c"UIScreen").map(|class| msg_send![class, mainScreen]);
-        let (screen_bounds, screen_scale) = match screen {
-            Some(screen) if !screen.is_null() => {
-                (msg_send![screen, bounds], msg_send![screen, scale])
-            }
-            _ => (CGRect::ZERO, 0.0),
+        let layer_frame: Option<CGRect> = if layer.is_null() {
+            None
+        } else {
+            Some(msg_send![layer, frame])
+        };
+        let layer_scale: Option<f64> = if layer.is_null() {
+            None
+        } else {
+            Some(msg_send![layer, contentsScale])
+        };
+        let screen: *mut AnyObject = match AnyClass::get(c"UIScreen") {
+            Some(class) => msg_send![class, mainScreen],
+            None => std::ptr::null_mut(),
+        };
+        let screen_bounds: Option<CGRect> = if screen.is_null() {
+            None
+        } else {
+            Some(msg_send![screen, bounds])
+        };
+        let screen_scale: Option<f64> = if screen.is_null() {
+            None
+        } else {
+            Some(msg_send![screen, scale])
         };
         format!(
-            "screen {}, at scale {:.1}; window {}; view frame {}, bounds {} at scale {:.1}; \
-             layer frame {} at scale {:.1}",
-            pt(screen_bounds),
-            screen_scale,
-            pt(window_bounds),
-            pt(view_frame),
-            pt(view_bounds),
+            "screen {} at scale {}; window {}; view frame {}, bounds {} at scale {:.1}; \
+             layer frame {} at scale {}",
+            points(screen_bounds),
+            scale(screen_scale),
+            points(window_bounds),
+            points(Some(view_frame)),
+            points(Some(view_bounds)),
             view_scale,
-            pt(layer_frame),
-            layer_scale,
+            points(layer_frame),
+            scale(layer_scale),
         )
     }
 }
 
 /// A rect in points, as UIKit prints it.
-fn pt(rect: CGRect) -> String {
-    format!(
-        "{:.0}x{:.0} at ({:.0}, {:.0}) pt",
-        rect.size.width, rect.size.height, rect.origin.x, rect.origin.y
-    )
+fn points(rect: Option<CGRect>) -> String {
+    match rect {
+        Some(rect) => format!(
+            "{:.0}x{:.0} at ({:.0}, {:.0}) pt",
+            rect.size.width, rect.size.height, rect.origin.x, rect.origin.y
+        ),
+        None => "none".to_string(),
+    }
+}
+
+/// A scale factor, or `none` when the object that has it is missing.
+fn scale(scale: Option<f64>) -> String {
+    match scale {
+        Some(scale) => format!("{scale:.1}"),
+        None => "none".to_string(),
+    }
 }
