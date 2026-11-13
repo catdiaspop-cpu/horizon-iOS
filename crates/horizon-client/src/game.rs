@@ -18509,6 +18509,20 @@ impl ApplicationHandler for Game<'_> {
             inner.height,
             window.scale_factor()
         );
+        // iOS: the same geometry in UIKit's terms (horizon-hdr holds the unsafe code), because a
+        // picture in the corner of the screen is a disagreement between these and the surface's.
+        #[cfg(target_os = "ios")]
+        {
+            use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+            if let Ok(handle) = window.window_handle()
+                && let RawWindowHandle::UiKit(view) = handle.as_raw()
+            {
+                log::info!(
+                    "Horizon iOS view: {}",
+                    horizon_hdr::ios_view::describe(view.ui_view.as_ptr())
+                );
+            }
+        }
         horizon_client::telemetry::note_display(&window);
         match self.new_renderer(window.clone()) {
             Ok(r) => {
@@ -22861,6 +22875,20 @@ impl Loading {
             inner.height,
             window.scale_factor()
         );
+        // iOS: the same geometry in UIKit's terms (horizon-hdr holds the unsafe code), because a
+        // picture in the corner of the screen is a disagreement between these and the surface's.
+        #[cfg(target_os = "ios")]
+        {
+            use winit::raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+            if let Ok(handle) = window.window_handle()
+                && let RawWindowHandle::UiKit(view) = handle.as_raw()
+            {
+                log::info!(
+                    "Horizon iOS view: {}",
+                    horizon_hdr::ios_view::describe(view.ui_view.as_ptr())
+                );
+            }
+        }
         horizon_client::telemetry::note_display(&window);
         // The renderer takes seconds to build and winit's window sits white
         // until the first frame presents, so paint the boot screen on it and

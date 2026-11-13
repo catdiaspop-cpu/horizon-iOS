@@ -10,6 +10,8 @@
 //! crate runs there, and neither the Vulkan backend nor ash is compiled in,
 //! so an iOS or macOS build links no Vulkan at all.
 
+#[cfg(target_os = "ios")]
+pub mod ios_view;
 #[cfg(target_os = "linux")]
 pub mod wayland;
 

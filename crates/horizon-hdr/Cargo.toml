@@ -19,6 +19,11 @@ wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
 # The version wgpu-hal already uses.
 ash = { version = "0.38", default-features = false }
 
+[target.'cfg(target_os = "ios")'.dependencies]
+# The view the game draws into, read back in UIKit's terms: the versions winit and wgpu use.
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # The versions winit already uses, with the color-management protocol (staging).
 wayland-backend = { version = "0.3.10", default-features = false, features = ["client_system"] }

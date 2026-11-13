@@ -18,6 +18,12 @@ on:
         description: "Bundle Minecraft's files in the app (huge IPA, much slower to sign)"
         type: boolean
         default: false
+      # The shipped IPA should be built with thin LTO and one codegen unit: it runs several
+      # percent faster on a phone, and costs the runner a much longer link.
+      optimized:
+        description: "Build with thin LTO (slower here, faster on the device)"
+        type: boolean
+        default: false
   push:
     branches: ["android-port", "main", "master"]
 
@@ -92,10 +98,9 @@ jobs:
 
       - name: Build the app and package the IPA
         env:
-          # `fast` is release code without thin LTO and with 16 codegen units: the shipped IPA
-          # wants `release`, but a CI loop on 3-4 cores cannot spend 40 minutes in one link, and
-          # the runner's 14 GB cannot hold its temporaries.
-          PROFILE: fast
+          # `fast` is release code without thin LTO and with 16 codegen units: quick to iterate
+          # on, a few percent slower on the device. The `optimized` input asks for `release`.
+          PROFILE: ${{ inputs.optimized && 'release' || 'fast' }}
           # The bundle takes the prepared folder instead of a copy of it.
           HORIZON_IOS_MOVE_RESOURCES: "1"
         run: |
